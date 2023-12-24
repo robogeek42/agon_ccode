@@ -6,7 +6,6 @@
 #include <string.h>
 #include <stdbool.h>
 
-#define LOAD_BMAP_BLOCK 65535
 #define DESC_MAX 40
 
 #define DEBUG 0
@@ -65,14 +64,21 @@ typedef struct {
 FINFO *images[20];
 int num_images=0;
 
-char infofilename[]="img/gallery.info";
+typedef struct {
+	int num_bitmaps;
+	int width;
+	int rows[4];
+} IMG_LOAD_INFO;
+IMG_LOAD_INFO img_load_info;
+
+char infofilename[]="img/gallery2.info";
 FILE *infofile;
 
 FILE *open_file( const char *fname, const char *mode);
 int close_file( FILE *fp );
 int parse_info(FILE *fp, FINFO **images);
 int read_str(FILE *fp, char *str, char stop);
-int load_bitmap_file( const char *fname, int width, int height );
+int load_bitmap_file( const char *fname, int width, int height, IMG_LOAD_INFO *load_info );
 
 int main()
 {
@@ -98,39 +104,46 @@ int main()
 	close_file(infofile);
 
 	do {
+		int num=0;
+		char buf[40];
+		int num_bitmaps=0;
+
 		vdp_clear_screen();
 
 		vdp_set_text_colour(45);
-		printf("Gallery. Small RGBA2 Image Viewer\r\n--------------------------------\r\n");
+		printf("Gallery. RGBA2 Image Viewer\r\n--------------------------\r\n");
 
 		vdp_set_text_colour(2);
 		for (int i=0; i<num_images; i++)
 		{
-			printf(" %2d : %s\r\n",i+1,images[i]->desc);
+			printf(" %2d : %s (%dx%d)\r\n",i+1,images[i]->desc,images[i]->width, images[i]->height);
 		}
 		vdp_set_text_colour(15);
 		printf("\r\nEnter number (q/x to quit):");	
-		int num=0;
-		char buf[40];
 		scanf("%[^\n]s",buf);
 		num=atoi(buf);
 		if (num>0 && num<=num_images)
 		{
-			if (images[num-1]->width*images[num-1]->height > 65535)
+			printf("Load %s\r\n",images[num-1]->fname);
+			num_bitmaps = load_bitmap_file( images[num-1]->fname, images[num-1]->width, images[num-1]->height, &img_load_info);
+			if (num_bitmaps == 0)
 			{
-				printf("Image too large\n");
+				printf( "Error loading bitmap.\n" );
+				return -1;
 			}
-			else
+			vdp_clear_screen();
+			
+			//printf("load %d bitmaps\n",num_bitmaps);
+			int row_start = (240-images[num-1]->height)/2;
+			for (int bm=0;bm<num_bitmaps;bm++)
 			{
-				if ( load_bitmap_file( images[num-1]->fname, images[num-1]->width, images[num-1]->height ) ) {
-					printf( "Error loading bitmap.\n" );
-				} else {
-					vdp_clear_screen();
-					draw_bitmap((320-images[num-1]->width)/2, (240-images[num-1]->height)/2);
-					// wait for a key press
-					getchar();
-				}
+				select_bitmap(bm);
+				draw_bitmap((320-images[num-1]->width)/2, row_start);
+				row_start+=img_load_info.rows[bm];
 			}
+
+			// wait for a key press
+			getchar();
 		}
 		else 
 		{
@@ -277,14 +290,28 @@ void adv_bitmap_from_buffer(int width, int height, int format)
 
 
 
-int load_bitmap_file( const char *fname, int width, int height )
+int load_bitmap_file( const char *fname, int width, int height, IMG_LOAD_INFO *load_info )
 {
 	FILE *fp;
 	char *buffer;
-	int exit_code = 0;
+	int bmap_id = 0;
+	int max_rows = 240;
+	int max_bytes = 65535;
+	int rows_remain = height;
+	int bytes_remain = width * height;
 
-	if ( !(buffer = (char *)malloc( LOAD_BMAP_BLOCK ) ) ) {
-		printf( "Failed to allocated memory for buffer.\n" );
+	if (width*height < 65536) { 
+		max_rows = height;
+		max_bytes = width*height;
+	} else {
+		max_rows = 65536/width;
+		max_bytes = max_rows * width;
+	}
+
+	printf("WxH %dx%d, max rows %d, max bytes %d\n",width,height, max_rows, max_bytes);
+	
+	if ( !(buffer = (char *)malloc( max_bytes ) ) ) {
+		printf( "Failed to allocate %d bytes for buffer.\n",max_bytes );
 		return -1;
 	}
 	if ( !(fp = fopen( fname, "rb" ) ) ) {
@@ -292,21 +319,41 @@ int load_bitmap_file( const char *fname, int width, int height )
 		return -1;
 	}
 
-	adv_clear_buffer(0xFA00);
-	adv_write_block(0xFA00, width*height);
+	rows_remain = height;
+	bytes_remain = width * height;
 
-	int size = width * height;
-	if ( size==0 || size > LOAD_BMAP_BLOCK ) return -1;
+	load_info->width = width;
+	load_info->rows[0]=0;
+	load_info->num_bitmaps=0;
 
-	if ( fread( buffer, 1, size, fp ) != (size_t)size ) exit_code = -1;
-	mos_puts( buffer, size, 0 );
+	while (bytes_remain > 0)
+	{
+		int size = (bytes_remain>max_bytes)?max_bytes:bytes_remain;
+		int rows = (rows_remain>max_rows)?max_rows:rows_remain;
 
+		adv_clear_buffer(0xFA00+bmap_id);
+		adv_write_block(0xFA00+bmap_id, size);
+
+		if ( fread( buffer, 1, size, fp ) != (size_t)size ) return 0;
+#if DEBUG==0
+		mos_puts( buffer, size, 0 );
+#else
+		printf("write %d bytes, %d rows\n",size,rows);
+#endif
+
+		select_bitmap(bmap_id);
+		adv_bitmap_from_buffer(width, rows, 1); // RGBA2
+		load_info->rows[bmap_id] = rows;
+
+		rows_remain -= rows;
+		bytes_remain -= size;
+		bmap_id++;
+	}
+	load_info->num_bitmaps=bmap_id;
+	
 	fclose( fp );
 	free( buffer );
 
-	select_bitmap(0);
-	adv_bitmap_from_buffer(width, height, 1); // RGBA2
-
-	return exit_code;
+	return bmap_id;
 }
 
