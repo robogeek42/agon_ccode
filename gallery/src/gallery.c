@@ -5,16 +5,17 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <sys/timers.h>
 
 #define DESC_MAX 40
 
 #define DEBUG 0
 
-void debug_vdu(unsigned char *vdu, int len);
+void debug_vdu(char *vdu, int len);
 
 #if DEBUG==1
-//#define MY_VDP_PUTS(S) debug_vdu((unsigned char *)&(S), sizeof(S)); mos_puts( (char *)&(S), sizeof(S), 0)
-#define MY_VDP_PUTS(S) debug_vdu((unsigned char *)&(S), sizeof(S)); 
+//#define MY_VDP_PUTS(S) debug_vdu((char *)&(S), sizeof(S)); mos_puts( (char *)&(S), sizeof(S), 0)
+#define MY_VDP_PUTS(S) debug_vdu((char *)&(S), sizeof(S)); 
 #else
 #define MY_VDP_PUTS(S) mos_puts( (char *)&(S), sizeof(S), 0)
 #endif
@@ -131,9 +132,11 @@ int main()
 				printf( "Error loading bitmap.\n" );
 				return -1;
 			}
-			vdp_clear_screen();
+#if DEBUG==0
+			//vdp_clear_screen();
+#endif
 			
-			//printf("load %d bitmaps\n",num_bitmaps);
+			printf("load %d bitmaps\n",num_bitmaps);
 			int row_start = (240-images[num-1]->height)/2;
 			for (int bm=0;bm<num_bitmaps;bm++)
 			{
@@ -239,11 +242,11 @@ int read_str(FILE *fp, char *str, char stop) {
  * My VDP commands 
  */
 
-void debug_vdu(unsigned char *vdu, int len){
+void debug_vdu(char *vdu, int len){
 	printf ("VDU ");
 	for (int i=0;i<len;i++){
-		printf("%02X ",vdu[i]);
-		//printf("%u,",vdu[i]);
+		//printf("%02X ",vdu[i]);
+		printf("%u,",vdu[i]);
 	}
 	printf("\r\n");
 }
@@ -331,8 +334,10 @@ int load_bitmap_file( const char *fname, int width, int height, IMG_LOAD_INFO *l
 		int size = (bytes_remain>max_bytes)?max_bytes:bytes_remain;
 		int rows = (rows_remain>max_rows)?max_rows:rows_remain;
 
+		printf("Create bitmap ID %d. Size %d. Rows%d.\n",bmap_id, size, rows);
 		adv_clear_buffer(0xFA00+bmap_id);
 		adv_write_block(0xFA00+bmap_id, size);
+		ticksleep(100); // add a delay to try and fix issue on real Agon
 
 		if ( fread( buffer, 1, size, fp ) != (size_t)size ) return 0;
 #if DEBUG==0
