@@ -35,6 +35,8 @@ Then indicate whether you want the RGB colours reversed.
 # Examples
 
 `parrot.rgb2 188x240
+
 `osaka.rgb2 320x240
+
 `agon_fast.rgb2 320x188
 
