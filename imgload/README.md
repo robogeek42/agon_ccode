@@ -25,7 +25,9 @@ called rgb8torgb2 (see rgb8torgb2.c)
 
 This can be run as 
 
+```
 rgb8torgb2 [RGB|RGBA] <fInile> <fOutile> [REV]
+```
 
 You tell it if your input is 3 byte or 4 ( RGB or RGBA)
 
