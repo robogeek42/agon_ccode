@@ -5,9 +5,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
-#include <sys/timers.h>
 
 #define DESC_MAX 40
+#define CHUNK_SIZE 1024
+#define SCR_MODE 8
+#define SCR_WIDTH 320
+#define SCR_HEIGHT 240
+
 
 #define DEBUG 0
 
@@ -49,6 +53,11 @@ typedef struct { uint8_t A; uint8_t B; uint8_t C; uint16_t bid; uint8_t op; } MY
 static MY_VDU_adv_clear_buffer  	my_adv_clear_buffer = { 23,  0, 0xA0, 0xFA00, 2};
 void adv_clear_buffer(int bufferID);
 
+// VDU 23, 0 &A0, bufferId; 14 : REM consolidate blocks
+typedef struct { uint8_t A; uint8_t B; uint8_t C; uint16_t bid; uint8_t op; } MY_VDU_adv_consolidate;
+static MY_VDU_adv_consolidate  	my_adv_consolidate = { 23,  0, 0xA0, 0xFA00, 14};
+void adv_consolidate(int bufferID);
+
 // VDU 23, 27, &21, width; height; format  : REM Create bitmap from buffer
 typedef struct { uint8_t A; uint8_t B; uint8_t C; uint16_t width; uint16_t height; uint8_t format; } MY_VDU_adv_bitmap_from_buffer;
 static MY_VDU_adv_bitmap_from_buffer	my_adv_bitmap_from_buffer = { 23, 27, 0x21, 0, 0, 1};
@@ -65,21 +74,14 @@ typedef struct {
 FINFO *images[20];
 int num_images=0;
 
-typedef struct {
-	int num_bitmaps;
-	int width;
-	int rows[4];
-} IMG_LOAD_INFO;
-IMG_LOAD_INFO img_load_info;
-
-char infofilename[]="img/gallery2.info";
+char infofilename[]="img/gallery.info";
 FILE *infofile;
 
 FILE *open_file( const char *fname, const char *mode);
 int close_file( FILE *fp );
 int parse_info(FILE *fp, FINFO **images);
 int read_str(FILE *fp, char *str, char stop);
-int load_bitmap_file( const char *fname, int width, int height, IMG_LOAD_INFO *load_info );
+int load_bitmap_file( const char *fname, int width, int height, int bmap_id);
 
 int main()
 {
@@ -88,10 +90,7 @@ int main()
 	vdp_vdu_init();
 	if ( vdp_key_init() == -1 ) return 1;
 
-	int iMode = 8;
-
-	my_mode.n = iMode;
-	VDP_PUTS( my_mode );
+	my_mode.n = 8; VDP_PUTS( my_mode );
 
 	logical_scr_dims(false);
 
@@ -107,7 +106,6 @@ int main()
 	do {
 		int num=0;
 		char buf[40];
-		int num_bitmaps=0;
 
 		vdp_clear_screen();
 
@@ -126,23 +124,14 @@ int main()
 		if (num>0 && num<=num_images)
 		{
 			printf("Load %s\r\n",images[num-1]->fname);
-			num_bitmaps = load_bitmap_file( images[num-1]->fname, images[num-1]->width, images[num-1]->height, &img_load_info);
-			if (num_bitmaps == 0)
-			{
-				printf( "Error loading bitmap.\n" );
-				return -1;
-			}
-#if DEBUG==0
-			//vdp_clear_screen();
-#endif
 			
-			printf("load %d bitmaps\n",num_bitmaps);
-			int row_start = (240-images[num-1]->height)/2;
-			for (int bm=0;bm<num_bitmaps;bm++)
+			if (load_bitmap_file( images[num-1]->fname, images[num-1]->width, images[num-1]->height, 0)==0)
 			{
-				select_bitmap(bm);
-				draw_bitmap((320-images[num-1]->width)/2, row_start);
-				row_start+=img_load_info.rows[bm];
+#if DEBUG==0
+				vdp_clear_screen();
+#endif
+				select_bitmap(0);
+				draw_bitmap((SCR_WIDTH-images[num-1]->width)/2, (SCR_HEIGHT-images[num-1]->height)/2);
 			}
 
 			// wait for a key press
@@ -283,6 +272,12 @@ void adv_clear_buffer(int bufferID)
 	MY_VDP_PUTS(my_adv_clear_buffer);
 }
 
+void adv_consolidate(int bufferID)
+{
+	my_adv_consolidate.bid = bufferID;
+	MY_VDP_PUTS(my_adv_consolidate);
+}
+
 void adv_bitmap_from_buffer(int width, int height, int format)
 {
 	my_adv_bitmap_from_buffer.width = width;
@@ -293,72 +288,49 @@ void adv_bitmap_from_buffer(int width, int height, int format)
 
 
 
-int load_bitmap_file( const char *fname, int width, int height, IMG_LOAD_INFO *load_info )
+int load_bitmap_file( const char *fname, int width, int height, int bmap_id )
 {
 	FILE *fp;
 	char *buffer;
-	int bmap_id = 0;
-	int max_rows = 240;
-	int max_bytes = 65535;
-	int rows_remain = height;
 	int bytes_remain = width * height;
 
-	if (width*height < 65536) { 
-		max_rows = height;
-		max_bytes = width*height;
-	} else {
-		max_rows = 65536/width;
-		max_bytes = max_rows * width;
-	}
-
-	printf("WxH %dx%d, max rows %d, max bytes %d\n",width,height, max_rows, max_bytes);
-	
-	if ( !(buffer = (char *)malloc( max_bytes ) ) ) {
-		printf( "Failed to allocate %d bytes for buffer.\n",max_bytes );
+	if ( !(buffer = (char *)malloc( CHUNK_SIZE ) ) ) {
+		printf( "Failed to allocate %d bytes for buffer.\n",CHUNK_SIZE );
 		return -1;
 	}
 	if ( !(fp = fopen( fname, "rb" ) ) ) {
-		printf( "Error opening file \"%sa\". Quitting.\n", fname );
+		printf( "Error opening file \"%s\". Quitting.\n", fname );
 		return -1;
 	}
 
-	rows_remain = height;
-	bytes_remain = width * height;
+	adv_clear_buffer(0xFA00+bmap_id);
 
-	load_info->width = width;
-	load_info->rows[0]=0;
-	load_info->num_bitmaps=0;
+	bytes_remain = width * height;
 
 	while (bytes_remain > 0)
 	{
-		int size = (bytes_remain>max_bytes)?max_bytes:bytes_remain;
-		int rows = (rows_remain>max_rows)?max_rows:rows_remain;
+		int size = (bytes_remain>CHUNK_SIZE)?CHUNK_SIZE:bytes_remain;
 
-		printf("Create bitmap ID %d. Size %d. Rows%d.\n",bmap_id, size, rows);
-		adv_clear_buffer(0xFA00+bmap_id);
 		adv_write_block(0xFA00+bmap_id, size);
-		ticksleep(100); // add a delay to try and fix issue on real Agon
 
 		if ( fread( buffer, 1, size, fp ) != (size_t)size ) return 0;
 #if DEBUG==0
 		mos_puts( buffer, size, 0 );
+		printf(".");
 #else
-		printf("write %d bytes, %d rows\n",size,rows);
+		printf("Write %d bytes\n",size);
 #endif
 
-		select_bitmap(bmap_id);
-		adv_bitmap_from_buffer(width, rows, 1); // RGBA2
-		load_info->rows[bmap_id] = rows;
-
-		rows_remain -= rows;
 		bytes_remain -= size;
-		bmap_id++;
 	}
-	load_info->num_bitmaps=bmap_id;
+	adv_consolidate(0xFA00+bmap_id);
+
+	select_bitmap(bmap_id);
+	adv_bitmap_from_buffer(width, height, 1); // RGBA2
+	printf("\n");
 	
 	fclose( fp );
 	free( buffer );
 
-	return bmap_id;
+	return 0;
 }
-
