@@ -157,10 +157,11 @@ void show_screen(float mag, int step)
 			vdp_gcol(0, col);
 			//vdp_gcol(0, rgb2);
 
-			//vdp_point(ix, iy);
-			vdp_move_to(ix,iy); vdp_filled_rect(ix+step,iy+step);
-			//vdp_move_to(ix,iy); vdp_line_to(ix+step,iy+step);
-			//printf("perlin = %f\n",val);
+			if (step==1) {
+				vdp_point(ix, iy);
+			} else {
+				vdp_move_to(ix,iy); vdp_filled_rect(ix+step,iy+step);
+			}
 		}
 		vdp_update_key_state();
 	}
