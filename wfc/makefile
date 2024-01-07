@@ -2,8 +2,8 @@
 # Makefile Options
 # ----------------------------
 
-NAME = fac
-DESCRIPTION = "Factory game"
+NAME = wfc
+DESCRIPTION = "Wave Function Collapse expt"
 COMPRESSED = NO
 LDHAS_ARG_PROCESSING = 1
 
