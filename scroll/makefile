@@ -13,3 +13,8 @@ CXXFLAGS = -Wall -Wextra -Oz
 # ----------------------------
 
 include $(shell cedev-config --makefile)
+
+install: bin/$(NAME).bin
+	srec_cat bin/$(NAME).bin -binary -offset 0x40000 -o bin/$(NAME).hex -intel
+	cp bin/$(NAME).bin ~/agon/fab-agon-emulator/sdcard/cc/$(NAME)/
+	cp bin/$(NAME).bin $(NAME).bin

@@ -78,15 +78,15 @@ void game_loop()
 	int exit=0;
 	do {
 		int dir=-1;
-		if ( vdp_check_key_press( 0x9c ) ) {dir=RIGHT; }
-		if ( vdp_check_key_press( 0x9a ) ) {dir=LEFT; }
+		if ( vdp_check_key_press( 0x9a ) ) {dir=RIGHT; }
+		if ( vdp_check_key_press( 0x9c ) ) {dir=LEFT; }
 		if ( vdp_check_key_press( 0x96 ) ) {dir=UP; }
 		if ( vdp_check_key_press( 0x98 ) ) {dir=DOWN; }
 		if (dir>=0) {
 			scroll_screen(dir, 1);
 		}
-		wait_clock( 4 );
-		//vdp_update_key_state();
+		//wait_clock( 1 );
+		vdp_update_key_state();
 	} while (exit==0);
 
 }
@@ -238,7 +238,7 @@ void scroll_screen(int dir, int step)
 			}
 			break;
 		case LEFT:
-			if (xpos < (MAPW*TILESIZE) - step)
+			if ((xpos + SCREENW + step) < (MAPW*TILESIZE))
 			{
 				xpos += step;
 				vdp_scroll_screen(dir, step);
@@ -253,18 +253,18 @@ void scroll_screen(int dir, int step)
 			{
 				ypos -= step;
 				vdp_scroll_screen(dir, step);
-				// draw tiles (tx,ty) to (tx,ty+len)
+				// draw tiles (tx,ty) to (tx+len,ty)
 				int tx=getTileX(xpos);
 				int ty=getTileY(ypos);
 				draw_horizontal(tx,ty, 1+SCREENW_TILES);
 			}
 			break;
 		case DOWN:
-			if (ypos < (MAPH*TILESIZE)-step)
+			if ((ypos + SCREENH + step) < (MAPH*TILESIZE))
 			{
 				ypos += step;
 				vdp_scroll_screen(dir, step);
-				// draw tiles (tx,ty) to (tx,ty+len)
+				// draw tiles (tx,ty) to (tx+len,ty)
 				int tx=getTileX(xpos);
 				int ty=getTileY(ypos + SCREENH -1);
 				draw_horizontal(tx,ty, 1+SCREENW_TILES);
