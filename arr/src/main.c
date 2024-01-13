@@ -30,6 +30,10 @@ int main(int argc, char * argv[])
 	}
 
 	uint8_t** arrs = (uint8_t **) malloc(sizeof(uint8_t*)*num_arr);
+	if(arrs==NULL) {
+		printf("Error allocating memory Exiting\n");
+		return -1;
+	}
 
 	// Alloc
 	int count = 0;	
@@ -37,6 +41,10 @@ int main(int argc, char * argv[])
 	{
 		printf("Alloc array size %dkb (%d bytes)\n",size, size*1024);
 		arrs[count] = (uint8_t*)malloc(size*1024*sizeof(uint8_t));
+		if(arrs[count]==NULL) {
+			printf("Error allocating memory %dk. Exiting\n",count);
+			return -1;
+		}
 		printf("Populate with rand values\n");
 		for (int i=0;i<size*1024;i++)
 		{
