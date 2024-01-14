@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
+#include <stdbool.h>
 
 #define CHUNK_SIZE 1024
 
@@ -19,8 +20,8 @@
 #define SCREENW  320
 #define SCREENH  240
 
-#define MAPW 64
-#define MAPH 32
+static int gMapWidth = 64;
+static int gMapHeight = 64;
 #define TILESIZE 8
 
 #define SCREENW_TILES SCREENW / TILESIZE
@@ -31,12 +32,15 @@
 #define UP 2
 #define DOWN 3
 
+#define COL(C) vdp_set_text_colour(C)
+#define TAB(X,Y) vdp_cursor_tab(Y,X)
+
 // Position of top-left of screen in world coords (pixel)
 int xpos=0, ypos=0;
 
 fnl_state noise;
 
-uint8_t world[MAPH][MAPW];
+uint8_t** world;
 
 FILE *open_file( const char *fname, const char *mode);
 int close_file( FILE *fp );
@@ -45,6 +49,7 @@ int load_bitmap_file( const char *fname, int width, int height, int bmap_id );
 
 void key_event_handler( KEY_EVENT key_event );
 void wait_clock( clock_t ticks );
+
 
 void load_images();
 void create_world_map(float mag);
@@ -63,6 +68,21 @@ void draw_screen();
 void scroll_screen(int dir, int step);
 void draw_horizontal(int tx, int ty, int len);
 void draw_vertical(int tx, int ty, int len);
+
+typedef struct {
+	int seed;
+	int mag_factor;
+	float mag;
+	int octaves;
+	int width;
+	int height;
+	char *filename;
+	uint24_t world_addr;
+} GenParams;
+
+bool gen_menu(GenParams* gp);
+bool load_world_map(GenParams *gp);
+bool save_world_map(GenParams *gp);
 
 void wait()
 {
@@ -95,36 +115,77 @@ int main(int argc, char *argv[])
 	if ( vdp_key_init() == -1 ) return 1;
 	vdp_set_key_event_handler( key_event_handler );
 
-	vdp_mode(MODE);
-	printf("Seed: %d Mag: %f ",seed,mag);
-	if (octaves>0) {
-		printf(" Fractal %d\n",octaves);
-	} else {
-		printf("\n");
-	}
+	GenParams genParams;
+	genParams.seed = seed;
+	genParams.mag = mag;
+	genParams.mag_factor = mag_factor;
+	genParams.width = gMapWidth;
+	genParams.height = gMapHeight;
+	genParams.octaves = octaves;
+	genParams.filename = NULL;
 
+	gen_menu(&genParams);
+
+	// allocate map array
+	world = (uint8_t **) malloc(sizeof(uint8_t*) * gMapHeight);
+	if (world == NULL)
+	{
+		printf("Out of memory\n");
+		return -1;
+	}
+	for (int i=0; i < gMapWidth; i++)
+	{
+		world[i] = (uint8_t *) malloc(sizeof(uint8_t) * gMapHeight);
+		if (world[i] == NULL)
+		{
+			printf("Out of memory\n");
+			return -1;
+		}
+	}
+	genParams.world_addr = (uint24_t) &(world[0][0]);
+	printf("Map array at %p 0x%X\n",&world, genParams.world_addr);
+	wait();
+
+	if (genParams.filename == NULL)
+	{
+		// Setup FastNoiseLite state 
+		noise = fnlCreateState();
+		//noise.noise_type = FNL_NOISE_OPENSIMPLEX2;
+		noise.noise_type = FNL_NOISE_PERLIN;
+		noise.seed = seed;
+		if (octaves>0) {
+			noise.fractal_type = FNL_FRACTAL_FBM;
+			noise.octaves = octaves;
+		}
+		create_world_map(mag);
+		save_world_map(&genParams);
+
+	} else {
+		if ( !load_world_map(&genParams) )
+		{
+			printf("Error loading map.\n");
+			return -1;
+		}
+	}
+	wait();
+
+	vdp_mode(MODE);
 	vdp_logical_scr_dims(false);
 
-	// Setup FastNoiseLite state 
-	noise = fnlCreateState();
-	//noise.noise_type = FNL_NOISE_OPENSIMPLEX2;
-	noise.noise_type = FNL_NOISE_PERLIN;
-	noise.seed = seed;
-	if (octaves>0) {
-		noise.fractal_type = FNL_FRACTAL_FBM;
-		noise.octaves = octaves;
-	}
-
-	load_images();
-
-	create_world_map(mag);
 	show_map();
 	// wait for a key press
 	wait(); 
 
+	load_images();
+
 	game_loop();
 
-	//free(world);
+	free(genParams.filename);
+	for (int i=0; i < gMapWidth; i++)
+	{
+		free(world[i]);
+	}
+	free(world);
 	return 0;
 }
 
@@ -141,8 +202,8 @@ void game_loop()
 		if (dir>=0) {
 			scroll_screen(dir,1);
 		}
-		wait_clock(4);
-		//vdp_update_key_state();
+		//wait_clock(4);
+		vdp_update_key_state();
 	} while (exit==0);
 
 }
@@ -281,10 +342,10 @@ uint8_t get_terrain_colour_bbc(uint8_t terrain)
 
 void create_world_map(float mag)
 {
-	printf("create world %dx%d tiles ", MAPW, MAPH);
-	for (int iy=0; iy < MAPH; iy++ )
+	printf("create world %dx%d tiles ", gMapWidth, gMapHeight);
+	for (int iy=0; iy < gMapHeight; iy++ )
 	{
-		for (int ix=0; ix < MAPW; ix++ )
+		for (int ix=0; ix < gMapWidth; ix++ )
 		{
 			float fx=((float)ix)/mag;
 			float fy=((float)iy)/mag;
@@ -305,12 +366,12 @@ void create_world_map(float mag)
 // show generated map (not tiled map) as colours
 void show_map()
 {
-	int xoff = (SCREENW - MAPW)/2;
-	int yoff = (SCREENH - MAPH)/2;
+	int xoff = (SCREENW - gMapWidth)/2;
+	int yoff = (SCREENH - gMapHeight)/2;
 	{
-		for (int iy=0; iy < MAPH; iy++ )
+		for (int iy=0; iy < gMapHeight; iy++ )
 		{
-			for (int ix=0; ix < MAPW; ix++ )
+			for (int ix=0; ix < gMapWidth; ix++ )
 			{
 				int tt = world[iy][ix];
 				vdp_gcol(0, get_terrain_colour_bbc(tt));
@@ -374,7 +435,7 @@ void scroll_screen(int dir, int step)
 			}
 			break;
 		case LEFT:
-			if ((xpos + SCREENW + step) < (MAPW * TILESIZE))
+			if ((xpos + SCREENW + step) < (gMapWidth * TILESIZE))
 			{
 				xpos += step;
 				vdp_scroll_screen(dir, step);
@@ -396,7 +457,7 @@ void scroll_screen(int dir, int step)
 			}
 			break;
 		case DOWN:
-			if ((ypos + SCREENH + step) < (MAPH * TILESIZE))
+			if ((ypos + SCREENH + step) < (gMapHeight * TILESIZE))
 			{
 				ypos += step;
 				vdp_scroll_screen(dir, step);
@@ -409,4 +470,64 @@ void scroll_screen(int dir, int step)
 		default:
 			break;
 	}
+}
+
+bool gen_menu(GenParams* gp)
+{
+	vdp_mode(3);
+	COL(3);
+	printf("Seed:\t%d\n",gp->seed);
+	printf("Size:\t%dx%d\n",gp->width,gp->height);
+	printf("Mag Factor:\t%d\t%f\n",gp->mag_factor,gp->mag);
+	
+	char fname[200];
+	sprintf(fname,"maps/map_%dx%d_%d_%d_%d.data",gp->width,gp->height,gp->seed,gp->mag_factor,gp->octaves);
+	printf("Check: %s\n",fname);
+	uint8_t fh = mos_fopen(fname, FA_READ);
+	if (fh == 0) 
+	{
+		// no file - not an error
+		goto err_return;
+	} else {
+		FIL* fil = mos_getfil(fh);
+		COL(2);
+		printf("File found, size : %lu\n",fil->obj.objsize);
+		if (fil->obj.objsize != (uint32_t) (gp->width * gp->height)) 
+		{
+			COL(1);
+			printf("Error - file size not correct\n");
+			mos_fclose(fh);
+			goto err_return;
+		}
+		gp->filename = malloc(strlen(fname)+1);
+		strcpy(gp->filename, fname);
+
+		mos_fclose(fh);
+	}
+
+	COL(15);
+	wait(); 
+	return true;
+err_return:
+	COL(15);
+	wait();
+	return false;
+}
+
+bool save_world_map(GenParams *gp)
+{
+	char fname[200];
+	sprintf(fname,"maps/map_%dx%d_%d_%d_%d.data",gp->width,gp->height,gp->seed,gp->mag_factor,gp->octaves);
+	uint8_t ret = mos_save( fname, gp->world_addr,  gMapWidth*gMapHeight );
+	printf("Saved file %s.\nReturn code: %d\n",fname,ret);
+	return true;
+}
+
+bool load_world_map(GenParams *gp)
+{
+	printf("Load file %s\n",gp->filename);
+	uint8_t ret = mos_load( gp->filename, gp->world_addr, gMapWidth*gMapHeight );
+	printf("Loaded file %s.\nReturn code: %d\n",gp->filename, ret);
+	wait();
+	return true;
 }
