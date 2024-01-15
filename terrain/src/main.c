@@ -35,12 +35,13 @@ static int gMapHeight = 64;
 #define COL(C) vdp_set_text_colour(C)
 #define TAB(X,Y) vdp_cursor_tab(Y,X)
 
+
 // Position of top-left of screen in world coords (pixel)
 int xpos=0, ypos=0;
 
 fnl_state noise;
 
-uint8_t** world;
+uint8_t* world;
 
 FILE *open_file( const char *fname, const char *mode);
 int close_file( FILE *fp );
@@ -78,6 +79,7 @@ typedef struct {
 	int height;
 	char *filename;
 	uint24_t world_addr;
+	uint24_t world_arrsize;
 } GenParams;
 
 bool gen_menu(GenParams* gp);
@@ -124,27 +126,19 @@ int main(int argc, char *argv[])
 	genParams.octaves = octaves;
 	genParams.filename = NULL;
 
+	genParams.world_arrsize = gMapWidth*gMapHeight ;
+
 	gen_menu(&genParams);
 
 	// allocate map array
-	world = (uint8_t **) malloc(sizeof(uint8_t*) * gMapHeight);
+	world = (uint8_t *) malloc(sizeof(uint8_t) * gMapWidth * gMapHeight);
 	if (world == NULL)
 	{
 		printf("Out of memory\n");
 		return -1;
 	}
-	for (int i=0; i < gMapWidth; i++)
-	{
-		world[i] = (uint8_t *) malloc(sizeof(uint8_t) * gMapHeight);
-		if (world[i] == NULL)
-		{
-			printf("Out of memory\n");
-			return -1;
-		}
-	}
-	genParams.world_addr = (uint24_t) &(world[0][0]);
-	printf("Map array at %p 0x%X\n",&world, genParams.world_addr);
-	wait();
+
+	genParams.world_addr = (uint24_t) world;
 
 	if (genParams.filename == NULL)
 	{
@@ -181,10 +175,6 @@ int main(int argc, char *argv[])
 	game_loop();
 
 	free(genParams.filename);
-	for (int i=0; i < gMapWidth; i++)
-	{
-		free(world[i]);
-	}
 	free(world);
 	return 0;
 }
@@ -354,7 +344,7 @@ void create_world_map(float mag)
 			float val = fnlGetNoise2D(&noise, fx, fy);
 			//val *= 1;
 			uint8_t tt = get_terrain_type(val); 
-			world[iy][ix] = tt;
+			world[iy*gMapWidth + ix] = tt;
 			//printf("%d,%d: val %f terr %d\n",ix,iy,val, tt);
 		}
 		vdp_update_key_state();
@@ -373,7 +363,7 @@ void show_map()
 		{
 			for (int ix=0; ix < gMapWidth; ix++ )
 			{
-				int tt = world[iy][ix];
+				int tt = world[iy*gMapWidth + ix];
 				vdp_gcol(0, get_terrain_colour_bbc(tt));
 				vdp_point(xoff+ix, yoff+iy);
 			}
@@ -402,7 +392,7 @@ void draw_horizontal(int tx, int ty, int len)
 
 	for (int i=0; i<len; i++)
 	{
-		vdp_select_bitmap( world[ty][tx+i] );
+		vdp_select_bitmap( world[ty*gMapWidth + tx+i] );
 		vdp_draw_bitmap( px + i*TILESIZE, py );
 	}
 	
@@ -414,7 +404,7 @@ void draw_vertical(int tx, int ty, int len)
 
 	for (int i=0; i<len; i++)
 	{
-		vdp_select_bitmap( world[ty+i][tx] );
+		vdp_select_bitmap( world[(ty+i)*gMapWidth + tx] );
 		vdp_draw_bitmap( px, py + i*TILESIZE );
 	}
 }
@@ -492,13 +482,15 @@ bool gen_menu(GenParams* gp)
 		FIL* fil = mos_getfil(fh);
 		COL(2);
 		printf("File found, size : %lu\n",fil->obj.objsize);
-		if (fil->obj.objsize != (uint32_t) (gp->width * gp->height)) 
+		
+		if (fil->obj.objsize != gp->world_arrsize) 
 		{
 			COL(1);
 			printf("Error - file size not correct\n");
 			mos_fclose(fh);
 			goto err_return;
 		}
+		
 		gp->filename = malloc(strlen(fname)+1);
 		strcpy(gp->filename, fname);
 
@@ -506,11 +498,9 @@ bool gen_menu(GenParams* gp)
 	}
 
 	COL(15);
-	wait(); 
 	return true;
 err_return:
 	COL(15);
-	wait();
 	return false;
 }
 
@@ -518,7 +508,7 @@ bool save_world_map(GenParams *gp)
 {
 	char fname[200];
 	sprintf(fname,"maps/map_%dx%d_%d_%d_%d.data",gp->width,gp->height,gp->seed,gp->mag_factor,gp->octaves);
-	uint8_t ret = mos_save( fname, gp->world_addr,  gMapWidth*gMapHeight );
+	uint8_t ret = mos_save( fname, gp->world_addr,  gp->world_arrsize );
 	printf("Saved file %s.\nReturn code: %d\n",fname,ret);
 	return true;
 }
@@ -526,8 +516,7 @@ bool save_world_map(GenParams *gp)
 bool load_world_map(GenParams *gp)
 {
 	printf("Load file %s\n",gp->filename);
-	uint8_t ret = mos_load( gp->filename, gp->world_addr, gMapWidth*gMapHeight );
+	uint8_t ret = mos_load( gp->filename, gp->world_addr, gp->world_arrsize );
 	printf("Loaded file %s.\nReturn code: %d\n",gp->filename, ret);
-	wait();
 	return true;
 }
