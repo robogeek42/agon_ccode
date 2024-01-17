@@ -50,11 +50,9 @@ int load_bitmap_file( const char *fname, int width, int height, int bmap_id );
 
 void key_event_handler( KEY_EVENT key_event );
 void wait_clock( clock_t ticks );
-
+double my_atof(char *str);
 
 void load_images();
-void create_world_map(float mag);
-uint8_t get_terrain_colour_bbc(uint8_t terrain);
 void show_map();
 void game_loop();
 
@@ -72,16 +70,19 @@ void draw_vertical(int tx, int ty, int len);
 
 typedef struct {
 	int seed;
-	int mag_factor;
-	float mag;
+	double mag;
 	int octaves;
 	int width;
 	int height;
 	char *filename;
 	uint24_t world_addr;
 	uint24_t world_arrsize;
+	float threshold[3];
 } GenParams;
 
+void create_world_map(GenParams *gp, double mag);
+uint8_t get_terrain_type(GenParams *gp, float val);
+uint8_t get_terrain_colour_bbc(uint8_t terrain);
 bool gen_menu(GenParams* gp);
 bool load_world_map(GenParams *gp);
 bool save_world_map(GenParams *gp);
@@ -95,22 +96,47 @@ void wait()
 int main(int argc, char *argv[])
 {
 	int seed=0;
-	int mag_factor = 2;
-	float mag = (float) mag_factor / 10.0;
+	double mag = 0.2;
 	int octaves=0;
+	float threshold[3] = { -0.11, 0.00, 0.5 }; // defaults
 
 	if (argc>1) {
+		if ( strcmp(argv[1],"-h")==0 )
+		{
+			printf("usage:\n %s: [-h] ", argv[0]);
+			printf("[seed] [map width] [map height] [mag] [octaves]\n");
+			return 0;
+		}
 		seed=atoi(argv[1]);
 	}
 	srand(seed);
 
 	if (argc>2) {
-		int mag_factor = atoi(argv[2]);
-		mag = (float) mag_factor / 10.0;
+		gMapWidth = atoi(argv[2]);
 	}
 
 	if (argc>3) {
-		octaves=atoi(argv[3]);
+		gMapHeight = atoi(argv[3]);
+	}
+
+	if (argc>4) {
+		mag = my_atof(argv[4]);
+	}
+
+	if (argc>5) {
+		octaves=atoi(argv[5]);
+	}
+
+	if (argc>6) {
+		threshold[0]=my_atof(argv[6]);
+	}
+
+	if (argc>7) {
+		threshold[1]=my_atof(argv[7]);
+	}
+
+	if (argc>8) {
+		threshold[2]=my_atof(argv[8]);
 	}
 
 	vdp_vdu_init();
@@ -120,11 +146,13 @@ int main(int argc, char *argv[])
 	GenParams genParams;
 	genParams.seed = seed;
 	genParams.mag = mag;
-	genParams.mag_factor = mag_factor;
 	genParams.width = gMapWidth;
 	genParams.height = gMapHeight;
 	genParams.octaves = octaves;
 	genParams.filename = NULL;
+	genParams.threshold[0] = threshold[0]; // water lowest
+	genParams.threshold[1] = threshold[1]; // dirt threshold followed by grass
+	genParams.threshold[2] = threshold[2]; // above this is mountains
 
 	genParams.world_arrsize = gMapWidth*gMapHeight ;
 
@@ -151,7 +179,7 @@ int main(int argc, char *argv[])
 			noise.fractal_type = FNL_FRACTAL_FBM;
 			noise.octaves = octaves;
 		}
-		create_world_map(mag);
+		create_world_map(&genParams, mag);
 		save_world_map(&genParams);
 
 	} else {
@@ -256,6 +284,13 @@ void wait_clock( clock_t ticks )
 	} while ( clock() - ticks_now < ticks );
 }
 
+double my_atof(char *str)
+{
+	double f = 0.0;
+	sscanf(str, "%lf", &f);
+	return f;
+}
+
 
 int load_bitmap_file( const char *fname, int width, int height, int bmap_id )
 {
@@ -311,11 +346,11 @@ void load_images()
 	}
 }
 
-uint8_t  get_terrain_type(float val)
+uint8_t get_terrain_type(GenParams *gp, float val)
 {
-	if (val < -0.11) return 1; // water
-	if (val <  0.00) return 2; // dirt
-	if (val > 0.50) return 3; // mountains
+	if (val < gp->threshold[0]) return 1; // water
+	if (val < gp->threshold[1]) return 2; // dirt
+	if (val > gp->threshold[2]) return 3; // mountains
 	return 0; // grass
 }
 
@@ -330,20 +365,20 @@ uint8_t get_terrain_colour_bbc(uint8_t terrain)
 	}
 }
 
-void create_world_map(float mag)
+void create_world_map(GenParams *gp, double mag)
 {
 	printf("create world %dx%d tiles ", gMapWidth, gMapHeight);
 	for (int iy=0; iy < gMapHeight; iy++ )
 	{
 		for (int ix=0; ix < gMapWidth; ix++ )
 		{
-			float fx=((float)ix)/mag;
-			float fy=((float)iy)/mag;
+			double fx=((double)ix)/mag;
+			double fy=((double)iy)/mag;
 			
 			/* Get noise value between -1 and 1 */
 			float val = fnlGetNoise2D(&noise, fx, fy);
 			//val *= 1;
-			uint8_t tt = get_terrain_type(val); 
+			uint8_t tt = get_terrain_type(gp, val); 
 			world[iy*gMapWidth + ix] = tt;
 			//printf("%d,%d: val %f terr %d\n",ix,iy,val, tt);
 		}
@@ -462,16 +497,29 @@ void scroll_screen(int dir, int step)
 	}
 }
 
+void get_filename(GenParams *gp, char *str)
+{
+	sprintf(str,"maps/map_%dx%d_%d_%.4lf_%d_%.3f_%.3f_%.3f.data",
+			gp->width,
+			gp->height,
+			gp->seed,
+			gp->mag,
+			gp->octaves,
+			gp->threshold[0],
+			gp->threshold[1],
+			gp->threshold[2]);
+}
 bool gen_menu(GenParams* gp)
 {
 	vdp_mode(3);
 	COL(3);
 	printf("Seed:\t%d\n",gp->seed);
 	printf("Size:\t%dx%d\n",gp->width,gp->height);
-	printf("Mag Factor:\t%d\t%f\n",gp->mag_factor,gp->mag);
+	printf("Mag:\t%lf\n",gp->mag);
+	printf("Thresholds: %0.2f %0.2f %0.2f\n",gp->threshold[0],gp->threshold[1],gp->threshold[2]);
 	
 	char fname[200];
-	sprintf(fname,"maps/map_%dx%d_%d_%d_%d.data",gp->width,gp->height,gp->seed,gp->mag_factor,gp->octaves);
+	get_filename(gp, fname);
 	printf("Check: %s\n",fname);
 	uint8_t fh = mos_fopen(fname, FA_READ);
 	if (fh == 0) 
@@ -507,7 +555,7 @@ err_return:
 bool save_world_map(GenParams *gp)
 {
 	char fname[200];
-	sprintf(fname,"maps/map_%dx%d_%d_%d_%d.data",gp->width,gp->height,gp->seed,gp->mag_factor,gp->octaves);
+	get_filename(gp, fname);
 	uint8_t ret = mos_save( fname, gp->world_addr,  gp->world_arrsize );
 	printf("Saved file %s.\nReturn code: %d\n",fname,ret);
 	return true;
