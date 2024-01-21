@@ -35,13 +35,14 @@ static int gMapHeight = 64;
 #define COL(C) vdp_set_text_colour(C)
 #define TAB(X,Y) vdp_cursor_tab(Y,X)
 
-
 // Position of top-left of screen in world coords (pixel)
 int xpos=0, ypos=0;
 
 fnl_state noise;
 
 uint8_t* world;
+uint8_t* tilemap;
+static bool bShowTile=true;
 
 FILE *open_file( const char *fname, const char *mode);
 int close_file( FILE *fp );
@@ -80,12 +81,29 @@ typedef struct {
 	float threshold[3];
 } GenParams;
 
+typedef struct {
+	char fname[20];
+	uint8_t id;
+	int nb[4];
+	uint8_t key;
+} TileInfoFile;
+
+uint8_t tileLU[256] = {0};
+
 void create_world_map(GenParams *gp, double mag);
 uint8_t get_terrain_type(GenParams *gp, float val);
 uint8_t get_terrain_colour_bbc(uint8_t terrain);
 bool gen_menu(GenParams* gp);
 bool load_world_map(GenParams *gp);
 bool save_world_map(GenParams *gp);
+
+void populate_tilemap(GenParams *gp);
+void create_tileLU();
+
+void save_map();
+
+#define TILE_INFO_FILE "img/tileinfo.txt"
+int readTileInfoFile(char *path, TileInfoFile *tif, int items);
 
 void wait()
 {
@@ -98,15 +116,17 @@ int main(int argc, char *argv[])
 	int seed=0;
 	double mag = 0.2;
 	int octaves=0;
-	float threshold[3] = { -0.11, 0.00, 0.5 }; // defaults
+	float threshold[3] = { -0.15, 0.00, 0.6 }; // defaults
 
+	if (argc <= 1 || (argc > 1 && strcmp(argv[1],"-h")==0)) {
+		printf("usage:\n %s: [-h] ", argv[0]);
+		printf("[seed] [map width] [map height] [mag] [octaves] [thresholds ... ]\n");
+		printf("defaults:\n");
+		printf(" Seed: %d\n Map WxH (8x8 tiles): %dx%d\n Mag : %.2f\n Octaves: %d (off)\n Thresholds %.2f %.2f %.2f\n",
+				seed, gMapWidth, gMapHeight, mag, octaves, threshold[0], threshold[1], threshold[2]);
+		return 0;
+	}
 	if (argc>1) {
-		if ( strcmp(argv[1],"-h")==0 )
-		{
-			printf("usage:\n %s: [-h] ", argv[0]);
-			printf("[seed] [map width] [map height] [mag] [octaves]\n");
-			return 0;
-		}
 		seed=atoi(argv[1]);
 	}
 	srand(seed);
@@ -157,8 +177,9 @@ int main(int argc, char *argv[])
 	genParams.world_arrsize = gMapWidth*gMapHeight ;
 
 	gen_menu(&genParams);
+	printf("Total heap space for maps : 2 x %dk\n",genParams.world_arrsize/1024);
 
-	// allocate map array
+	// allocate world map array
 	world = (uint8_t *) malloc(sizeof(uint8_t) * gMapWidth * gMapHeight);
 	if (world == NULL)
 	{
@@ -198,6 +219,20 @@ int main(int argc, char *argv[])
 	// wait for a key press
 	wait(); 
 
+	create_tileLU();
+
+	printf("alloc tile map and populate\n");
+	// allocate tile map
+	tilemap = (uint8_t *) malloc(sizeof(uint8_t) * gMapWidth * gMapHeight);
+	if (tilemap == NULL)
+	{
+		printf("Out of memory\n");
+		return -1;
+	}
+
+	populate_tilemap(&genParams);
+	printf("done\n");
+
 	load_images();
 
 	game_loop();
@@ -219,6 +254,14 @@ void game_loop()
 		if ( vdp_check_key_press( 0x98 ) ) {dir=3; }	// down
 		if (dir>=0) {
 			scroll_screen(dir,1);
+		}
+		if ( vdp_check_key_press( 0x26 ) || vdp_check_key_press( 0x2D ) ) exit=1; // q or x
+		if ( vdp_check_key_press( 0x2C ) ) bShowTile = false; // w = world
+		if ( vdp_check_key_press( 0x29 ) ) bShowTile = true; // t = tiles
+
+		if ( vdp_check_key_press( 0x28 ) || vdp_check_key_press( 0x42 ) ) { // sS save
+			save_map();
+			draw_screen();
 		}
 		//wait_clock(4);
 		vdp_update_key_state();
@@ -273,6 +316,7 @@ void key_event_handler( KEY_EVENT key_event )
 
 	if ( key_event.key_data == prev_key_event.key_data ) return;
 	prev_key_event = key_event;
+	//printf("%X",key_event.code);
 }
 
 void wait_clock( clock_t ticks )
@@ -316,7 +360,6 @@ int load_bitmap_file( const char *fname, int width, int height, int bmap_id )
 		int size = (bytes_remain>CHUNK_SIZE)?CHUNK_SIZE:bytes_remain;
 
 		vdp_adv_write_block(0xFA00+bmap_id, size);
-		//ticksleep(100); // add a delay to try and fix issue on real Agon
 
 		if ( fread( buffer, 1, size, fp ) != (size_t)size ) return 0;
 		mos_puts( buffer, size, 0 );
@@ -338,7 +381,7 @@ int load_bitmap_file( const char *fname, int width, int height, int bmap_id )
 void load_images() 
 {
 	char fname[20];
-	for (int fn=1; fn<=4; fn++)
+	for (int fn=1; fn<=24; fn++)
 	{
 		sprintf(fname, "img/t%02d.rgb2",fn);
 		//printf("load %s\n",fname);
@@ -427,7 +470,12 @@ void draw_horizontal(int tx, int ty, int len)
 
 	for (int i=0; i<len; i++)
 	{
-		vdp_select_bitmap( world[ty*gMapWidth + tx+i] );
+		if (bShowTile)
+		{
+			vdp_select_bitmap( tilemap[ty*gMapWidth + tx+i] );
+		} else {
+			vdp_select_bitmap( world[ty*gMapWidth + tx+i] );
+		}
 		vdp_draw_bitmap( px + i*TILESIZE, py );
 	}
 	
@@ -439,7 +487,12 @@ void draw_vertical(int tx, int ty, int len)
 
 	for (int i=0; i<len; i++)
 	{
-		vdp_select_bitmap( world[(ty+i)*gMapWidth + tx] );
+		if (bShowTile)
+		{
+			vdp_select_bitmap( tilemap[(ty+i)*gMapWidth + tx] );
+		} else {
+			vdp_select_bitmap( world[(ty+i)*gMapWidth + tx] );
+		}
 		vdp_draw_bitmap( px, py + i*TILESIZE );
 	}
 }
@@ -516,6 +569,7 @@ bool gen_menu(GenParams* gp)
 	printf("Seed:\t%d\n",gp->seed);
 	printf("Size:\t%dx%d\n",gp->width,gp->height);
 	printf("Mag:\t%lf\n",gp->mag);
+	printf("Octaves:\t%lf\n",gp->octaves);
 	printf("Thresholds: %0.2f %0.2f %0.2f\n",gp->threshold[0],gp->threshold[1],gp->threshold[2]);
 	
 	char fname[200];
@@ -567,4 +621,200 @@ bool load_world_map(GenParams *gp)
 	uint8_t ret = mos_load( gp->filename, gp->world_addr, gp->world_arrsize );
 	printf("Loaded file %s.\nReturn code: %d\n",gp->filename, ret);
 	return true;
+}
+
+void populate_tilemap(GenParams *gp)
+{
+	printf("Populate tilemap\n");
+	int ws = (int)gp->world_arrsize;
+
+	for (int i=0; i < ws; i++)
+	{
+		int w = gp->width;
+
+		// indexes of neighbours
+		int nb[4] = {-1,-1,-1,-1};
+
+		if (i >= w) {
+			nb[0] = i - w; // above
+		}
+		if ((i % w) < (w - 1)) {
+			nb[1] = i + 1; // right
+		}
+		if (i < (ws - w) ) {
+			nb[2] = i + w; // below
+		}
+		if ((i % w) > 0) {
+			nb[3] = i - 1; // left
+		}
+
+		// Edge pieces should remain the starting colour for ease
+		if (nb[0]<0 || nb[1]<0 || nb[2]<0 || nb[3]<0) 
+		{
+			tilemap[i] = world[i];
+			continue;
+		}
+		// if we placed a diagonal piece before or above, skip this next tile
+		if (tilemap[nb[0]]>3 || tilemap[nb[3]]>3)
+		{
+			tilemap[i] = world[i];
+			continue;
+		}
+
+		// get colour of neighbours
+		uint8_t nbc[4] = {0,0,0,0};
+		for (int n=0; n<4; n++)
+		{
+			nbc[n] = world[nb[n]];
+		}
+		
+		// calculate tile key based on neighbours with North in LSB
+		// key = 0bWWSSEENN
+		uint8_t tile_key = 0;
+		for (int n=0; n<4; n++) {
+			tile_key |= (nbc[n] & 0x3) << 2*n;
+		}
+		
+		// Tile Look-up 256 possibilities of tile neighbours
+		// current tile set will obviously match only 24 of these,
+		tilemap[i] = tileLU[tile_key];
+	
+
+		vdp_update_key_state();
+		if (i%20==0) {
+			//getch();
+		}
+	}
+}
+
+int readTileInfoFile(char *path, TileInfoFile *tif, int items)
+{
+	char line[40];
+	int tif_lines = items;
+	FILE *fp = open_file(path, "r");
+	if (fp == NULL) { return false; }
+
+	// mode where we tell caller how many lines are in the file so it can malloc
+	if (tif == NULL)
+	{
+		tif_lines = 0;
+		while (fgets(line, 40, fp))
+		{
+			if (line[0] == '#') continue;
+			tif_lines++;
+		}
+		close_file(fp);
+		return tif_lines;
+	}
+	
+	// write lines to tif
+	fp = open_file(path, "r");
+	if (fp == NULL) { return false; }
+
+	int item=0;
+	while (fgets(line, 40, fp))
+	{
+		if (line[0] == '#') continue;
+
+		char *pch[8]; int i=0;
+
+		// get first token
+		pch[i] = strtok(line, ",");
+		while (pch[i] != NULL)
+		{
+			// get next token
+			i++;
+			pch[i] = strtok(NULL,",");
+		}
+		strncpy(tif[item].fname,pch[0],20);
+		tif[item].id = (uint8_t) atoi(pch[1]);
+		tif[item].nb[0] = atoi(pch[2]);
+		tif[item].nb[1] = atoi(pch[3]);
+		tif[item].nb[2] = atoi(pch[4]);
+		tif[item].nb[3] = atoi(pch[5]);
+
+		item++;
+	}
+
+	close_file(fp);
+	return item;
+}
+
+void create_tileLU()
+{
+	int items = readTileInfoFile(TILE_INFO_FILE, NULL, 0);
+	TileInfoFile *tif = malloc(sizeof(TileInfoFile) * items);
+	readTileInfoFile(TILE_INFO_FILE, tif, items);
+	printf("Read %d tile info items\n",items);
+	
+	// calculate a tile key for each tile. Each can be 4 colours
+	// north tile bits are in LSB = 0bWWSSEENN
+	for (int i=0; i<items; i++)
+	{
+		tif[i].key = 0;
+		for (int n=0; n<4; n++) {
+			tif[i].key |= (tif[i].nb[n] & 0x3) << 2*n;
+		}
+	}
+
+	// Place the diagonals special tiles in the look-up table
+	for (int i=0; i<items; i++)
+	{
+		tileLU[ tif[i].key ] = tif[i].id;
+	}
+	printf("Create Tile lookup table\n");
+	for (unsigned int i=0; i<=255; i++)
+	{
+		int nb[4];
+		nb[0] = ((uint8_t)i & 0x03);
+		nb[1] = ((uint8_t)i & 0x0C)>>2; 
+		nb[2] = ((uint8_t)i & 0x30)>>4; 
+		nb[3] = ((uint8_t)i & 0xC0)>>6; 
+
+		int cnt[4] = {0};
+		// get a count of each colour type
+		for (int n=0; n<4; n++)
+		{
+			cnt[nb[n]]++;
+		}
+		for (int n=0; n<4; n++)
+		{
+			if (cnt[n]>2) 
+			{
+				tileLU[i]=n;
+				break;
+			}
+			if (cnt[n]==2 && cnt[n]>cnt[(n+1)%4] &&  cnt[n]>cnt[(n+2)%4] && cnt[n]>cnt[(n+3)%4])
+			{
+				tileLU[i]=n;
+				break;
+			}
+		}
+
+		/*
+		printf("Tile %d : %1d %1d %1d %1d %d\n", i, 
+				 nb[0],nb[1],nb[2],nb[3],
+				tileLU[i]);
+		if (i%22 == 21){wait();}
+		*/
+	}
+
+}
+
+void save_map()
+{
+	char mapname[100];
+	vdp_cursor_tab(0,0);
+	printf("Save TileMap\n\nName? ");
+	scanf("%s", mapname);
+	if (strlen(mapname)==0)
+	{
+		return;
+	}
+	printf("\nSaving tilemap %s :",mapname);
+
+	uint8_t ret = mos_save( mapname, (uint24_t) tilemap,  gMapWidth * gMapHeight );
+	printf("Done.  Return code %d.\n",ret);
+	wait();
+
 }
