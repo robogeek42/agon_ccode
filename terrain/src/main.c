@@ -569,7 +569,7 @@ bool gen_menu(GenParams* gp)
 	printf("Seed:\t%d\n",gp->seed);
 	printf("Size:\t%dx%d\n",gp->width,gp->height);
 	printf("Mag:\t%lf\n",gp->mag);
-	printf("Octaves:\t%lf\n",gp->octaves);
+	printf("Octaves:\t%d\n",gp->octaves);
 	printf("Thresholds: %0.2f %0.2f %0.2f\n",gp->threshold[0],gp->threshold[1],gp->threshold[2]);
 	
 	char fname[200];
