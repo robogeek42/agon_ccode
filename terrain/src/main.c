@@ -237,6 +237,7 @@ int main(int argc, char *argv[])
 
 	game_loop();
 
+	free(tilemap);
 	free(genParams.filename);
 	free(world);
 	return 0;
@@ -799,6 +800,7 @@ void create_tileLU()
 		*/
 	}
 
+	free(tif);
 }
 
 void save_map()
