@@ -4,9 +4,10 @@
 20 PROCloadImages
 30 PRINT"done"
 35 CLS
-40 PROCshowImages
+40 REM PROCshowImages
 60 MW%=30 : MH%=30 : REM Map width and height
-70 XPOS%=160:YPOS%=160 : REM Position of top-left of screen in world coords (pixel)
+70 XPOS%=80:YPOS%=80 : REM Position of top-left of screen in world coords (pixel)
+75 SPEED%=2
 80 DIM map%(MH%,MW%)
 90 PROCloadmap(MW%, MH%)
 
@@ -16,10 +17,10 @@
 140 REPEAT
 150 key=INKEY(0)
 160 IF key = ASC("x") OR key=ASC("X") ISEXIT=1 : REM x=exit
-170 IF key=8 THEN : PROCdrawcol : REM left
-180 IF key=21 THEN XPOS%=XPOS%-1 : PROCdrawcol : REM right
-190 IF key=11 THEN XPOS%=XPOS%-1 : PROCdrawcol : REM up
-200 IF key=10 THEN XPOS%=XPOS%-1 : PROCdrawcol : REM down
+170 IF key=8 THEN  PROCscrollLeft : REM left
+180 IF key=21 THEN PROCscrollRight : REM right
+190 IF key=11 THEN PROCscrollUp : REM up
+200 IF key=10 THEN PROCscrollDown : REM down
 
 300 UNTIL ISEXIT=1
 
@@ -99,10 +100,33 @@
 2050 NEXT i%
 2090 ENDPROC
 
-2100 DEF PROCscrollH(STEP%)
-2110 IF XPOS%=XPOS%+STEP%
-2120 
+2100 DEF PROCscrollRight
+2110 IF XPOS% < SPEED% THEN ENDPROC
+2130 XPOS% = XPOS% - SPEED%
+2150 VDU 23,7,1,0,SPEED%
+2160 PROCdrawcol( XPOS%/16, YPOS%/16, 1+SHT%)
+2170 ENDPROC
 
+2200 DEF PROCscrollLeft
+2220 IF (XPOS%+SW%+SPEED%) >= MW%*16 THEN ENDPROC
+2230 XPOS%=XPOS% + SPEED%
+2250 VDU 23,7,1,1,SPEED%
+2260 PROCdrawcol( (XPOS% + SW% -1)/16, YPOS%/16, 1+SHT%)
+2270 ENDPROC
+
+2300 DEF PROCscrollUp
+2320 IF YPOS% < SPEED% THEN ENDPROC
+2330 YPOS%=YPOS%-SPEED%
+2350 VDU 23,7,1,2,SPEED%
+2360 PROCdrawrow(XPOS%/16, YPOS%/16, 1+SWT%)
+2370 ENDPROC
+
+2400 DEF PROCscrollDown
+2410 IF (YPOS% + SH% + SPEED%) >= MH%*16 THEN ENDPROC
+2430 YPOS%=YPOS%+SPEED%
+2450 VDU 23,7,1,3,SPEED%
+2460 PROCdrawrow(XPOS%/16, (YPOS%+SH%-1)/16, 1+SWT%)
+2470 ENDPROC
 
 2999 REM data for a tile map 28x28 16x16 tiles
 3000 DATA 1,1,1,1,1,18,1,1,1,1,1,1,1,1,1,1,1,1,1,1,18,1,1,1,1,1,1,1,1,1
