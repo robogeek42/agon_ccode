@@ -5,12 +5,23 @@
 30 PRINT"done"
 35 CLS
 40 PROCshowImages
-60 MW%=28 : MH%=28 : REM Map width and height
-70 XPOS%=10:YPOS%=10 : REM Position of top-left of screen in world coords (pixel)
+60 MW%=30 : MH%=30 : REM Map width and height
+70 XPOS%=160:YPOS%=160 : REM Position of top-left of screen in world coords (pixel)
 80 DIM map%(MH%,MW%)
 90 PROCloadmap(MW%, MH%)
 
 100 PROCdrawscreen
+120 ISEXIT=0
+130 REM game loop
+140 REPEAT
+150 key=INKEY(0)
+160 IF key = ASC("x") OR key=ASC("X") ISEXIT=1 : REM x=exit
+170 IF key=8 THEN : PROCdrawcol : REM left
+180 IF key=21 THEN XPOS%=XPOS%-1 : PROCdrawcol : REM right
+190 IF key=11 THEN XPOS%=XPOS%-1 : PROCdrawcol : REM up
+200 IF key=10 THEN XPOS%=XPOS%-1 : PROCdrawcol : REM down
+
+300 UNTIL ISEXIT=1
 
 990 VDU 23,0,192,1,23,1,1 : REM restore cursor and logical drawing
 999 END
@@ -88,6 +99,9 @@
 2050 NEXT i%
 2090 ENDPROC
 
+2100 DEF PROCscrollH(STEP%)
+2110 IF XPOS%=XPOS%+STEP%
+2120 
 
 
 2999 REM data for a tile map 28x28 16x16 tiles
