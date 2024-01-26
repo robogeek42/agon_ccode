@@ -12,6 +12,9 @@ extern "C" {
 #define VDP_PUTS(S) mos_puts( (char *)&(S), sizeof(S), 0)
 
 volatile SYSVAR *vdp_vdu_init( void );
+void vdp_write_at_text_cursor( void );
+void vdp_write_at_graphics_cursor( void );
+void vdp_enable_screen( void );
 void vdp_bell( void );
 void vdp_cursor_left( void );
 void vdp_cursor_right( void );
@@ -19,18 +22,28 @@ void vdp_cursor_down( void );
 void vdp_cursor_up( void );
 void vdp_cursor_up( void );
 void vdp_clear_screen( void );
+void vdp_page_mode_on( void );
+void vdp_page_mode_off( void );
 void vdp_clear_graphics( void );
+void vdp_reset_graphics( void );
+void vdp_disable_screen( void );
 void vdp_cursor_home( void );
 void vdp_cursor_tab( int row, int col );
 void vdp_set_text_colour( int colour );
-void vdp_gcol(int mode, int colour );
+void vdp_set_graphics_colour( int mode, int colour );
 void vdp_define_colour (int logical, int red, int green, int blue );
 void vdp_graphics_origin( int x, int y );
 int vdp_mode( int mode );
 void vdp_get_scr_dims( bool );
+void vdp_redefine_character( int chnum, uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3, uint8_t b4, uint8_t b5, uint8_t b6, uint8_t b7 );
 void vdp_logical_scr_dims( bool );
 void vdp_cursor_enable( bool flag );
+void vdp_scroll_screen_extent( int extent, int direction, int speed );
 void vdp_scroll_screen(int direction, int speed);
+
+void vdp_reset_viewports( void );
+void vdp_set_graphics_viewport( int left, int bottom, int right, int top );
+void vdp_set_text_viewport( int left, int bottom, int right, int top );
 
 void vdp_move_to( int x, int y );
 void vdp_line_to( int x, int y );
@@ -77,3 +90,4 @@ void vdp_adv_bitmap_from_buffer(int width, int height, int format);
 #endif
 
 #endif
+
