@@ -31,6 +31,7 @@ void vdp_cursor_home( void );
 void vdp_cursor_tab( int row, int col );
 void vdp_set_text_colour( int colour );
 void vdp_set_graphics_colour( int mode, int colour );
+#define vdp_gcol( M, C ) vdp_set_graphics_colour( M, C )
 void vdp_define_colour (int logical, int red, int green, int blue );
 void vdp_graphics_origin( int x, int y );
 int vdp_mode( int mode );

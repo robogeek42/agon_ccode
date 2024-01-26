@@ -101,9 +101,6 @@ void vdp_set_graphics_colour( int mode, int colour )
 	VDP_PUTS( vdu_set_graphics_colour );
 }
 
-// alias
-#define vdp_gcol( M, C ) vdp_set_graphics_colour( M, C )
-
 void vdp_define_colour(int logical, int red, int green, int blue )
 {
 	vdu_define_colour.l = logical;
