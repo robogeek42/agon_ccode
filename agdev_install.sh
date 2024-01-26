@@ -23,7 +23,7 @@ rm -rf $CEDEV_FINAL
 
 # Get the full version of CEdev from the TAR file
 cd /tmp ; rm -rf CEdev
-tar xf ~/Downloads/CEdev-Linux.tar.gz
+tar xf $CEDEV_TAR
 mv CEdev $CEDEV_FINAL
 
 # ... but now we can get our modified version which was created with agdev_make.sh
