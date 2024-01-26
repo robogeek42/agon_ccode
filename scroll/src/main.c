@@ -37,8 +37,10 @@ void wait_clock( clock_t ticks );
 
 void game_loop();
 void load_images();
+void load_sprites();
 void create_map(int w, int h);
 void draw_screen();
+void select_sprite( int sprite );
 
 int getWorldCoordX(int sx) { return (xpos + sx); }
 int getWorldCoordY(int sy) { return (ypos + sy); }
@@ -51,6 +53,22 @@ void scroll_screen(int dir, int step);
 void draw_horizontal(int tx, int ty, int len);
 void draw_vertical(int tx, int ty, int len);
 
+static int bob_sprite_down = 0;
+static int bob_sprite_up = 1;
+static int bob_sprite_left = 2;
+static int bob_sprite_right = 3;
+static int bob_down_index = 40;
+static int bob_up_index = 44;
+static int bob_left_index = 48;
+static int bob_right_index = 52;
+
+int current_sprite = 0;
+
+static int bobX = 0, bobY = 0;
+
+static clock_t anim_time;
+static clock_t anim_length = 10;
+
 int main(/* int argc, char *argv[] */)
 {
 	vdp_vdu_init();
@@ -61,12 +79,19 @@ int main(/* int argc, char *argv[] */)
 	vdp_logical_scr_dims(false);
 
 	load_images();
+	load_sprites();
 	//getchar();
 	create_map(MAPW, MAPH);
 	
 	/* start screen centred */
 	xpos = TILESIZE*(MAPW - SCREENW/TILESIZE)/2; 
 	ypos = TILESIZE*(MAPH - SCREENH/TILESIZE)/2; 
+	bobX = xpos + TILESIZE*(SCREENW/TILESIZE)/2;
+	bobY = ypos + TILESIZE*(SCREENH/TILESIZE)/2;
+
+	vdp_select_sprite(current_sprite);
+	vdp_move_sprite_to(bobX-xpos, bobY-ypos);
+	vdp_show_sprite();
 
 	draw_screen();
 
@@ -75,19 +100,66 @@ int main(/* int argc, char *argv[] */)
 	return 0;
 }
 
+void select_sprite( int sprite )
+{
+	current_sprite = sprite;
+	for (int s=0; s<4; s++)
+	{
+		vdp_select_sprite(s);
+		if (s == current_sprite)
+		{
+			vdp_show_sprite();
+		} 
+		else 
+		{
+			vdp_hide_sprite();
+		}
+	}
+	vdp_select_sprite(current_sprite);
+	if ((clock() - anim_time) > anim_length) {
+		vdp_next_sprite_frame();
+		anim_time = clock();
+	}
+}
+
 void game_loop()
 {
+	int speed=1;
+	anim_time = clock();
 	do {
 		int dir=-1;
-		if ( vdp_check_key_press( 0x9a ) ) {dir=RIGHT; }
-		if ( vdp_check_key_press( 0x9c ) ) {dir=LEFT; }
-		if ( vdp_check_key_press( 0x96 ) ) {dir=UP; }
-		if ( vdp_check_key_press( 0x98 ) ) {dir=DOWN; }
-		if (dir>=0) {
-			scroll_screen(dir, 2);
+		if ( vdp_check_key_press( 0x9a ) ) {
+			dir=RIGHT;
+			select_sprite(bob_sprite_left);
+			bobX -= speed;
 		}
-		//wait_clock( 1 );
-		vdp_update_key_state();
+		if ( vdp_check_key_press( 0x9c ) ) {
+			dir=LEFT;
+			select_sprite(bob_sprite_right);
+			bobX += speed;
+		}
+		if ( vdp_check_key_press( 0x96 ) ) {
+			dir=UP;
+			select_sprite(bob_sprite_up);
+			bobY -= speed;
+		}
+		if ( vdp_check_key_press( 0x98 ) ) {
+			dir=DOWN;
+			select_sprite(bob_sprite_down);
+			bobY += speed;
+		}
+		
+		vdp_move_sprite_to(bobX-xpos, bobY-ypos);
+		vdp_refresh_sprites();
+
+		if (dir>=0) {
+			scroll_screen(dir, speed);
+		}
+		
+
+		wait_clock( 1 );
+		//vdp_update_key_state();
+
 	} while (bExit==0);
 
 }
@@ -162,12 +234,37 @@ int load_bitmap_file( const char *fname, int width, int height, int bmap_id )
 void load_images() 
 {
 	char fname[20];
+	printf("Load tiles.\n");
 	for (int fn=1; fn<=18; fn++)
 	{
 		sprintf(fname, "img/ts%02d.rgb2",fn);
-		//printf("load %s\n",fname);
+		//printf("load %s %d\n",fname, fn);
 		load_bitmap_file(fname, TILESIZE,TILESIZE, fn);
 	}
+	printf("done.\n");
+}
+void load_sprites() 
+{
+	char fname[20];
+	printf("Load Bob.\n");
+	//vdp_reset_sprites();
+	for (int fn=1; fn<=16; fn++)
+	{
+		sprintf(fname, "img/bob/bob%02d.rgb2",fn);
+		//printf("load %s %d\n",fname, bob_down_index + fn - 1);
+		load_bitmap_file(fname, TILESIZE,TILESIZE, bob_down_index + fn - 1);
+	}
+	vdp_create_sprite( bob_sprite_down, bob_down_index, 4 );
+	vdp_create_sprite( bob_sprite_up, bob_up_index, 4 );
+	vdp_create_sprite( bob_sprite_left, bob_left_index, 4 );
+	vdp_create_sprite( bob_sprite_right, bob_right_index, 4 );
+	vdp_activate_sprites( 4 );
+	for (int s=0; s<4; s++)
+	{
+		vdp_select_sprite( s );
+		vdp_hide_sprite();
+	}
+	printf("done.\n");
 }
 
 uint8_t lake[8][8] = {
