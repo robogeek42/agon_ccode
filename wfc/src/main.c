@@ -13,6 +13,7 @@ void init_screen();
 void deinit_screen();
 int load_bitmaps();
 void show_screen();
+void save_map(char *name);
 
 void wait()
 {
@@ -54,7 +55,11 @@ int main(int argc, char *argv[])
 	show_screen();
 
 	// wait for a key press
-	wait(); 
+	char k=getchar();
+	if (k=='s') {
+		save_map("wfc.map");
+	}
+	wait();
 
 	deinit_screen();
 	return 0;
@@ -190,4 +195,20 @@ void show_screen()
 	}
 }
 
-
+void save_map(char *name)
+{
+	FILE *fp = open_file(name, "w");
+	if (fp==NULL) return;
+	int cnt=0;
+	for (int y=0;y<HEIGHT_TILES;y++)
+	{
+		for (int x=0;x<WIDTH_TILES;x++)
+		{
+			fputc((uint8_t) screen[y][x]->id, fp);
+			cnt++;
+		}
+	}
+	printf("\nwrote %d bytes to %s\n",cnt,name);
+	close_file(fp);
+	
+}
