@@ -40,9 +40,10 @@ int xpos=0, ypos=0;
 
 fnl_state noise;
 
-uint8_t* world;
-uint8_t* tilemap;
+uint8_t *world;
+uint8_t *tilemap;
 static bool bShowTile=true;
+float *noisemap;
 
 FILE *open_file( const char *fname, const char *mode);
 int close_file( FILE *fp );
@@ -79,6 +80,7 @@ typedef struct {
 	uint24_t world_addr;
 	uint24_t world_arrsize;
 	float threshold[3];
+	char *noisefilename;
 } GenParams;
 
 typedef struct {
@@ -90,7 +92,7 @@ typedef struct {
 
 uint8_t tileLU[256] = {0};
 
-void create_world_map(GenParams *gp, double mag);
+void create_world_map(GenParams *gp);
 uint8_t get_terrain_type(GenParams *gp, float val);
 uint8_t get_terrain_colour_bbc(uint8_t terrain);
 bool gen_menu(GenParams* gp);
@@ -102,8 +104,12 @@ void create_tileLU();
 
 void save_map();
 
+bool bSaveNoiseOnly = false;
+
 #define TILE_INFO_FILE "img/tileinfo.txt"
 int readTileInfoFile(char *path, TileInfoFile *tif, int items);
+
+void noise_map(GenParams *gp, char *fname);
 
 void wait()
 {
@@ -117,10 +123,12 @@ int main(int argc, char *argv[])
 	double mag = 0.2;
 	int octaves=0;
 	float threshold[3] = { -0.15, 0.00, 0.6 }; // defaults
+	char noisefilename[100];
 
 	if (argc <= 1 || (argc > 1 && strcmp(argv[1],"-h")==0)) {
-		printf("usage:\n %s: [-h] ", argv[0]);
+		printf("usage:\n %s .: [-h] ", argv[0]);
 		printf("[seed] [map width] [map height] [mag] [octaves] [thresholds ... ]\n");
+		printf("[seed] [map width] [map height] [mag] [octaves] -f <noise_map_name>\n");
 		printf("defaults:\n");
 		printf(" Seed: %d\n Map WxH (8x8 tiles): %dx%d\n Mag : %.2f\n Octaves: %d (off)\n Thresholds %.2f %.2f %.2f\n",
 				seed, gMapWidth, gMapHeight, mag, octaves, threshold[0], threshold[1], threshold[2]);
@@ -149,13 +157,26 @@ int main(int argc, char *argv[])
 
 	if (argc>6) {
 		threshold[0]=my_atof(argv[6]);
+		if (argv[6][0] == '-')
+		{
+			if(argv[6][1] == 'f' && argc>7) 
+			{
+				strncpy(noisefilename, argv[7], 100);
+				bSaveNoiseOnly = true;
+			}
+			else
+			{
+				printf("error\n");
+				return -1;
+			}
+		}
 	}
 
-	if (argc>7) {
+	if (!bSaveNoiseOnly && argc>7) {
 		threshold[1]=my_atof(argv[7]);
 	}
 
-	if (argc>8) {
+	if (!bSaveNoiseOnly && argc>8) {
 		threshold[2]=my_atof(argv[8]);
 	}
 
@@ -200,8 +221,16 @@ int main(int argc, char *argv[])
 			noise.fractal_type = FNL_FRACTAL_FBM;
 			noise.octaves = octaves;
 		}
-		create_world_map(&genParams, mag);
-		save_world_map(&genParams);
+		if (!bSaveNoiseOnly)
+		{
+			create_world_map(&genParams);
+			save_world_map(&genParams);
+		}
+		else
+		{
+			noise_map(&genParams, noisefilename);
+			return 0;
+		}
 
 	} else {
 		if ( !load_world_map(&genParams) )
@@ -409,15 +438,15 @@ uint8_t get_terrain_colour_bbc(uint8_t terrain)
 	}
 }
 
-void create_world_map(GenParams *gp, double mag)
+void create_world_map(GenParams *gp)
 {
 	printf("create world %dx%d tiles ", gMapWidth, gMapHeight);
 	for (int iy=0; iy < gMapHeight; iy++ )
 	{
 		for (int ix=0; ix < gMapWidth; ix++ )
 		{
-			double fx=((double)ix)/mag;
-			double fy=((double)iy)/mag;
+			double fx=((double)ix)/gp->mag;
+			double fy=((double)iy)/gp->mag;
 			
 			/* Get noise value between -1 and 1 */
 			float val = fnlGetNoise2D(&noise, fx, fy);
@@ -819,4 +848,34 @@ void save_map()
 	printf("Done.  Return code %d.\n",ret);
 	wait();
 
+}
+
+void noise_map(GenParams *gp, char *fname)
+{
+	printf("create noise map %dx%d ... ", gMapWidth, gMapHeight);
+	noisemap = malloc(sizeof(float)*gMapWidth*gMapHeight);
+	if (noisemap==NULL)
+	{
+		printf("Error allocating noisemap\n");
+		return;
+	}
+
+	for (int iy=0; iy < gMapHeight; iy++ )
+	{
+		for (int ix=0; ix < gMapWidth; ix++ )
+		{
+			double fx=((double)ix)/gp->mag;
+			double fy=((double)iy)/gp->mag;
+			
+			/* Get noise value between -1 and 1 */
+			noisemap[ix+iy*gMapWidth] = fnlGetNoise2D(&noise, fx, fy);
+		}
+		vdp_update_key_state();
+		if ((iy % 8) == 7) { printf("."); }
+	}
+	// save the noise map
+	printf(" done. Saving ... ");
+	uint8_t ret = mos_save( fname, (uint24_t) noisemap, gMapWidth * gMapHeight * sizeof(float) );
+	printf("Done.  Return code %d.\n",ret);
+	return;
 }
