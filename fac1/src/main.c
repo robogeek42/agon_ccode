@@ -13,16 +13,16 @@
 
 #define CHUNK_SIZE 1024
 
-#define MODE 8
-#define SCREENW  320
-#define SCREENH  240
+bool db = true;
+int gMode = 8; 
+int gScreenWidth = 320;
+int gScreenHeight = 240;
 
-static int gMapWidth = 64;
-static int gMapHeight = 64;
-#define TILESIZE 8
+int gMapWidth = 64;
+int gMapHeight = 64;
+int gTileSize = 8;
 
-#define SCREENW_TILES SCREENW / TILESIZE
-#define SCREENH_TILES SCREENH / TILESIZE
+int gTileSet=0;
 
 #define RIGHT 0
 #define LEFT 1
@@ -30,7 +30,7 @@ static int gMapHeight = 64;
 #define DOWN 3
 
 #define COL(C) vdp_set_text_colour(C)
-#define TAB(X,Y) vdp_cursor_tab(Y,X)
+#define TAB(X,Y) vdp_cursor_tab(X,Y)
 
 // Position of top-left of screen in world coords (pixel)
 int xpos=0, ypos=0;
@@ -52,13 +52,14 @@ void game_loop();
 
 int getWorldCoordX(int sx) { return (xpos + sx); }
 int getWorldCoordY(int sy) { return (ypos + sy); }
-int getTileX(int sx) { return (sx/TILESIZE); }
-int getTileY(int sy) { return (sy/TILESIZE); }
-int getTilePosInScreenX(int tx) { return ((tx * TILESIZE) - xpos); }
-int getTilePosInScreenY(int ty) { return ((ty * TILESIZE) - ypos); }
+int getTileX(int sx) { return (sx/gTileSize); }
+int getTileY(int sy) { return (sy/gTileSize); }
+int getTilePosInScreenX(int tx) { return ((tx * gTileSize) - xpos); }
+int getTilePosInScreenY(int ty) { return ((ty * gTileSize) - ypos); }
 
 void draw_screen();
-void scroll_screen(int dir, int step);
+void draw_UI(bool draw);
+void scroll_screen(int dir, int step, bool updatepos);
 void draw_horizontal(int tx, int ty, int len);
 void draw_vertical(int tx, int ty, int len);
 
@@ -74,18 +75,25 @@ typedef struct {
 #define TILE_INFO_FILE "img/tileinfo.txt"
 int readTileInfoFile(char *path, TileInfoFile *tif, int items);
 
+int UIboxes=4;
+int UIboxW=18;
+int UIboxH=18;
+int UIpos[4];
+bool bShowUI=true;
+
 void wait()
 {
 	char k=getchar();
 	if (k=='q') exit(0);
 }
 
-int main(int argc, char *argv[])
+int main(/*int argc, char *argv[]*/)
 {
 	vdp_vdu_init();
 	if ( vdp_key_init() == -1 ) return 1;
 	vdp_set_key_event_handler( key_event_handler );
 
+	// custom map which is 256x256 tiles
 	gMapWidth = 256;
 	gMapHeight = 256;
 	tilemap = (uint8_t *) malloc(sizeof(uint8_t) * gMapWidth * gMapHeight);
@@ -102,16 +110,25 @@ int main(int argc, char *argv[])
 		goto my_exit;
 	}
 
-	vdp_mode(MODE);
+	UIpos[0]=(gScreenWidth-UIboxes*UIboxW)/2;
+	UIpos[2]=gScreenWidth-UIpos[0];
+	UIpos[1]=gScreenHeight-UIboxH;
+	UIpos[3]=gScreenHeight-1;
+	
+	// setup complete
+	vdp_mode(gMode + (db?128:0));
 	vdp_logical_scr_dims(false);
+	//vdu_set_graphics_viewport()
 
 	load_images();
 
 	game_loop();
 
 my_exit:
-	vdp_logical_scr_dims(true);
 	free(tilemap);
+	vdp_mode(0);
+	vdp_logical_scr_dims(true);
+	vdp_cursor_enable( true );
 	return 0;
 }
 
@@ -119,17 +136,74 @@ void game_loop()
 {
 	int exit=0;
 	draw_screen();
+	if (db) 
+	{
+		vdp_swap();
+		draw_screen();
+	}
 	do {
 		int dir=-1;
 		if ( vdp_check_key_press( 0x9a ) ) {dir=0; }	// right
 		if ( vdp_check_key_press( 0x9c ) ) {dir=1; }	// left
 		if ( vdp_check_key_press( 0x96 ) ) {dir=2; }	// up
 		if ( vdp_check_key_press( 0x98 ) ) {dir=3; }	// down
+		if ( vdp_check_key_press( 0x2C ) ) {dir=2; }	// up    W
+		if ( vdp_check_key_press( 0x16 ) ) {dir=0; }	// right A
+		if ( vdp_check_key_press( 0x28 ) ) {dir=3; }	// down  S
+		if ( vdp_check_key_press( 0x19 ) ) {dir=1; }	// left  D
 		if (dir>=0) {
-			scroll_screen(dir,1);
+			if (db) {
+				draw_UI(false);
+				scroll_screen(dir,1,false);
+				draw_UI(true);
+				//draw_screen();
+				vdp_swap();
+			}
+			draw_UI(false);
+			scroll_screen(dir,1,true);
+			draw_UI(true);
 		}
 		if ( vdp_check_key_press( 0x26 ) || vdp_check_key_press( 0x2D ) ) exit=1; // q or x
 
+		if ( vdp_check_key_press( 0x4F ) || vdp_check_key_press( 0x70 ) ) // - or _
+		{
+			if ( gTileSize == 16 )
+			{
+				gTileSize = 8;
+				gTileSet = 0;
+				xpos /= 2; xpos -= gScreenWidth /4;
+				ypos /= 2; ypos -= gScreenHeight /4;
+				if ( xpos+gScreenWidth > gMapWidth*gTileSize ) xpos=gMapWidth*gTileSize-gScreenWidth;
+				if ( ypos+gScreenHeight > gMapHeight*gTileSize ) ypos=gMapHeight*gTileSize-gScreenHeight;
+				if ( xpos < 0 ) xpos = 0;
+				if ( ypos < 0 ) ypos = 0;
+				draw_screen();
+				if (db) {
+					vdp_swap();
+					draw_screen();
+				}
+			}
+		}
+		if ( vdp_check_key_press( 0x4E ) || vdp_check_key_press( 0x51 ) ) // = or +
+		{
+			if ( gTileSize == 8 )
+			{
+				gTileSize = 16;
+				gTileSet = 64;
+				xpos *= 2; xpos += gScreenWidth /2;
+				ypos *= 2; ypos += gScreenHeight /2;
+				if ( xpos+gScreenWidth > gMapWidth*gTileSize ) xpos=gMapWidth*gTileSize-gScreenWidth;
+				if ( ypos+gScreenHeight > gMapHeight*gTileSize ) ypos=gMapHeight*gTileSize-gScreenHeight;
+				if ( xpos < 0 ) xpos = 0;
+				if ( ypos < 0 ) ypos = 0;
+				draw_screen();
+				if (db) {
+					vdp_swap();
+					draw_screen();
+				}
+			}
+		}
+		//TAB(4,4);printf("%d %d",xpos,ypos);
 		//wait_clock(4);
 		vdp_update_key_state();
 	} while (exit==0);
@@ -177,7 +251,9 @@ static KEY_EVENT prev_key_event = { 0 };
 void key_event_handler( KEY_EVENT key_event )
 {
 	if ( key_event.code == 0x7d ) {
+		vdp_mode(0);
 		vdp_cursor_enable( true );
+		vdp_logical_scr_dims(true);
 		exit( 1 );						// Exit program if esc pressed
 	}
 
@@ -250,9 +326,11 @@ void load_images()
 	char fname[20];
 	for (int fn=1; fn<=24; fn++)
 	{
-		sprintf(fname, "img/t%02d.rgb2",fn);
+		sprintf(fname, "img/t8/t%02d.rgb2",fn);
 		//printf("load %s\n",fname);
-		load_bitmap_file(fname, TILESIZE,TILESIZE, fn-1);
+		load_bitmap_file(fname, 8, 8, fn-1);
+		sprintf(fname, "img/t16/tt%02d.rgb2",fn);
+		load_bitmap_file(fname, 16, 16, 64+fn-1);
 	}
 }
 
@@ -262,10 +340,12 @@ void draw_screen()
 	int tx=getTileX(xpos);
 	int ty=getTileY(ypos);
 
-	for (int i=0; i < (1+SCREENH/TILESIZE); i++) 
+	for (int i=0; i < (1+gScreenHeight/gTileSize); i++) 
 	{
-		draw_horizontal(tx, ty+i, 1+(SCREENW/TILESIZE));
+		draw_horizontal(tx, ty+i, 1+(gScreenWidth/gTileSize));
 	}
+
+	draw_UI(true);
 }
 
 void draw_horizontal(int tx, int ty, int len)
@@ -275,8 +355,8 @@ void draw_horizontal(int tx, int ty, int len)
 
 	for (int i=0; i<len; i++)
 	{
-		vdp_select_bitmap( tilemap[ty*gMapWidth + tx+i] );
-		vdp_draw_bitmap( px + i*TILESIZE, py );
+		vdp_select_bitmap( tilemap[ty*gMapWidth + tx+i] + gTileSet);
+		vdp_draw_bitmap( px + i*gTileSize, py );
 	}
 	
 }
@@ -287,13 +367,13 @@ void draw_vertical(int tx, int ty, int len)
 
 	for (int i=0; i<len; i++)
 	{
-		vdp_select_bitmap( tilemap[(ty+i)*gMapWidth + tx] );
-		vdp_draw_bitmap( px, py + i*TILESIZE );
+		vdp_select_bitmap( tilemap[(ty+i)*gMapWidth + tx] + gTileSet);
+		vdp_draw_bitmap( px, py + i*gTileSize );
 	}
 }
 
 /* 0=right, 1, left, 2=up, 3=down */
-void scroll_screen(int dir, int step)
+void scroll_screen(int dir, int step, bool updatepos)
 {
 	switch (dir) {
 		case RIGHT:
@@ -304,18 +384,20 @@ void scroll_screen(int dir, int step)
 				// draw tiles (tx,ty) to (tx,ty+len)
 				int tx=getTileX(xpos);
 				int ty=getTileY(ypos);
-				draw_vertical(tx,ty, 1+(SCREENH/TILESIZE));
+				draw_vertical(tx,ty, 1+(gScreenHeight/gTileSize));
+				if (!updatepos) xpos += step;
 			}
 			break;
 		case LEFT:
-			if ((xpos + SCREENW + step) < (gMapWidth * TILESIZE))
+			if ((xpos + gScreenWidth + step) < (gMapWidth * gTileSize))
 			{
 				xpos += step;
 				vdp_scroll_screen(dir, step);
 				// draw tiles (tx,ty) to (tx,ty+len)
-				int tx=getTileX(xpos + SCREENW -1);
+				int tx=getTileX(xpos + gScreenWidth -1);
 				int ty=getTileY(ypos);
-				draw_vertical(tx,ty, 1+(SCREENH/TILESIZE));
+				draw_vertical(tx,ty, 1+(gScreenHeight/gTileSize));
+				if (!updatepos) xpos -= step;
 			}
 			break;
 		case UP:
@@ -326,18 +408,20 @@ void scroll_screen(int dir, int step)
 				// draw tiles (tx,ty) to (tx+len,ty)
 				int tx=getTileX(xpos);
 				int ty=getTileY(ypos);
-				draw_horizontal(tx,ty, 1+(SCREENW/TILESIZE));
+				draw_horizontal(tx,ty, 1+(gScreenWidth/gTileSize));
+				if (!updatepos) ypos += step;
 			}
 			break;
 		case DOWN:
-			if ((ypos + SCREENH + step) < (gMapHeight * TILESIZE))
+			if ((ypos + gScreenHeight + step) < (gMapHeight * gTileSize))
 			{
 				ypos += step;
 				vdp_scroll_screen(dir, step);
 				// draw tiles (tx,ty) to (tx+len,ty)
 				int tx=getTileX(xpos);
-				int ty=getTileY(ypos + SCREENH -1);
-				draw_horizontal(tx,ty, 1+(SCREENW/TILESIZE));
+				int ty=getTileY(ypos + gScreenHeight -1);
+				draw_horizontal(tx,ty, 1+(gScreenWidth/gTileSize));
+				if (!updatepos) ypos -= step;
 			}
 			break;
 		default:
@@ -402,4 +486,32 @@ int load_map(char *mapname)
 {
 	uint8_t ret = mos_load( mapname, (uint24_t) tilemap,  gMapWidth * gMapHeight );
 	return ret;
+}
+
+void draw_UI(bool draw) 
+{
+	if (!bShowUI) return;
+	if (draw) {
+		//vdp_set_graphics_colour(0,1);
+		//vdp_move_to(UIpos[0],UIpos[1]);
+		//vdp_filled_rect(UIpos[2],UIpos[3]);
+		vdp_set_graphics_colour(0,15);
+		for (int box=0;box<=UIboxes;box++)
+		{
+			vdp_move_to(UIpos[0]+box*UIboxW,UIpos[1]);
+			vdp_line_to(UIpos[0]+box*UIboxW,UIpos[3]);
+		}
+		vdp_move_to(UIpos[0],UIpos[1]);
+		vdp_line_to(UIpos[2],UIpos[1]);
+		vdp_move_to(UIpos[0],UIpos[3]);
+		vdp_line_to(UIpos[2],UIpos[3]);
+	} else {
+		int tx1=getTileX(xpos+UIpos[0]);
+		int ty1=getTileY(ypos+UIpos[1]);
+		int tx2=getTileX(xpos+UIpos[2]);
+		int ty2=getTileY(ypos+UIpos[3]);
+		for (int ty=ty1; ty<=ty2; ty++) {
+			draw_horizontal(tx1, ty, 1+ (tx2-tx1) );
+		}
+	}
 }
