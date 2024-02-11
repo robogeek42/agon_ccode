@@ -28,6 +28,11 @@ int gTileSet=0;
 #define SCROLL_UP 2
 #define SCROLL_DOWN 3
 
+#define BOB_DOWN 0
+#define BOB_UP 1
+#define BOB_LEFT 2
+#define BOB_RIGHT 3
+
 #define COL(C) vdp_set_text_colour(C)
 #define TAB(X,Y) vdp_cursor_tab(X,Y)
 
@@ -70,7 +75,6 @@ int getTilePosInScreenX(int tx) { return ((tx * gTileSize) - xpos); }
 int getTilePosInScreenY(int ty) { return ((ty * gTileSize) - ypos); }
 
 void draw_screen();
-void draw_UI(bool draw);
 void scroll_screen(int dir, int step, bool updatepos);
 void draw_horizontal(int tx, int ty, int len);
 void draw_vertical(int tx, int ty, int len);
@@ -92,10 +96,20 @@ int UIboxW=18;
 int UIboxH=18;
 int UIpos[4];
 bool bShowUI=true;
+void draw_UI(bool draw);
 
-int bobX=0;
-int bobY=0;
+int bobx=0;
+int boby=0;
 bool bShowBob=true;
+void draw_bob(bool draw, int bx, int by, int px, int py);
+void move_bob(int dir, int speed);
+int gBobTileSet = 128;
+int bob_facing = BOB_DOWN;
+int bob_frame = 0;
+
+clock_t bob_wait_ticks;
+clock_t bob_anim_ticks;
+clock_t move_wait_ticks;
 
 void wait()
 {
@@ -134,8 +148,8 @@ int main(/*int argc, char *argv[]*/)
 	/* start screen centred */
 	xpos = gTileSize*(gMapWidth - gScreenWidth/gTileSize)/2; 
 	ypos = gTileSize*(gMapHeight - gScreenHeight/gTileSize)/2; 
-	bobX = xpos + gTileSize*(gScreenWidth/gTileSize)/2;
-	bobY = ypos + gTileSize*(gScreenHeight/gTileSize)/2;
+	bobx = xpos + gTileSize*(gScreenWidth/gTileSize)/2;
+	boby = ypos + gTileSize*(gScreenHeight/gTileSize)/2;
 
 	// setup complete
 	vdp_mode(gMode + (db?128:0));
@@ -163,27 +177,46 @@ void game_loop()
 		vdp_swap();
 		draw_screen();
 	}
+	bob_wait_ticks = clock();
+	bob_anim_ticks = clock();
+
 	do {
 		int dir=-1;
 		if ( vdp_check_key_press( KEY_LEFT ) ) {dir=SCROLL_RIGHT; }
 		if ( vdp_check_key_press( KEY_RIGHT ) ) {dir=SCROLL_LEFT; }
 		if ( vdp_check_key_press( KEY_UP ) ) {dir=SCROLL_UP; }
 		if ( vdp_check_key_press( KEY_DOWN ) ) {dir=SCROLL_DOWN; }
-		if ( vdp_check_key_press( KEY_w ) || vdp_check_key_press( KEY_W ) ) {dir=SCROLL_UP; }
-		if ( vdp_check_key_press( KEY_a ) || vdp_check_key_press( KEY_A ) ) {dir=SCROLL_RIGHT; }
-		if ( vdp_check_key_press( KEY_s ) || vdp_check_key_press( KEY_S ) ) {dir=SCROLL_DOWN; }
-		if ( vdp_check_key_press( KEY_d ) || vdp_check_key_press( KEY_D ) ) {dir=SCROLL_LEFT; }
-		if (dir>=0) {
+		if ( vdp_check_key_press( KEY_w ) || vdp_check_key_press( KEY_W ) ) {move_bob(BOB_UP, 1); }
+		if ( vdp_check_key_press( KEY_a ) || vdp_check_key_press( KEY_A ) ) {move_bob(BOB_LEFT, 1); }
+		if ( vdp_check_key_press( KEY_s ) || vdp_check_key_press( KEY_S ) ) {move_bob(BOB_DOWN, 1); }
+		if ( vdp_check_key_press( KEY_d ) || vdp_check_key_press( KEY_D ) ) {move_bob(BOB_RIGHT, 1); }
+		if (dir>=0 && ( move_wait_ticks < clock() ) ) {
+			int bx=bobx;
+			int by=boby;
+			int px=xpos; int nx=xpos;
+			int py=ypos; int ny=ypos;
+			switch (dir) {
+				case SCROLL_RIGHT: nx-=1;break;
+				case SCROLL_LEFT: nx+=1;break;
+				case SCROLL_UP: ny-=1;break;
+				case SCROLL_DOWN: ny+=1;break;
+			}
 			if (db) {
 				draw_UI(false);
+				draw_bob(false,bx,by,px,py);
 				scroll_screen(dir,1,false);
 				draw_UI(true);
+				draw_bob(true,bx,by,nx,ny);
 				//draw_screen();
 				vdp_swap();
 			}
 			draw_UI(false);
+			draw_bob(false,bx,by,px,py);
 			scroll_screen(dir,1,true);
 			draw_UI(true);
+			draw_bob(true,bx,by,nx,ny);
+			
+			move_wait_ticks = clock() + 5;
 		}
 		if ( vdp_check_key_press( 0x26 ) || vdp_check_key_press( 0x2D ) ) exit=1; // q or x
 
@@ -193,12 +226,15 @@ void game_loop()
 			{
 				gTileSize = 8;
 				gTileSet = 0;
+				gBobTileSet = 128;
 				xpos /= 2; xpos -= gScreenWidth /4;
 				ypos /= 2; ypos -= gScreenHeight /4;
 				if ( xpos+gScreenWidth > gMapWidth*gTileSize ) xpos=gMapWidth*gTileSize-gScreenWidth;
 				if ( ypos+gScreenHeight > gMapHeight*gTileSize ) ypos=gMapHeight*gTileSize-gScreenHeight;
 				if ( xpos < 0 ) xpos = 0;
 				if ( ypos < 0 ) ypos = 0;
+				bobx /= 2;
+				boby /= 2;
 				draw_screen();
 				if (db) {
 					vdp_swap();
@@ -212,12 +248,15 @@ void game_loop()
 			{
 				gTileSize = 16;
 				gTileSet = 64;
+				gBobTileSet = 128+16;
 				xpos *= 2; xpos += gScreenWidth /2;
 				ypos *= 2; ypos += gScreenHeight /2;
 				if ( xpos+gScreenWidth > gMapWidth*gTileSize ) xpos=gMapWidth*gTileSize-gScreenWidth;
 				if ( ypos+gScreenHeight > gMapHeight*gTileSize ) ypos=gMapHeight*gTileSize-gScreenHeight;
 				if ( xpos < 0 ) xpos = 0;
 				if ( ypos < 0 ) ypos = 0;
+				bobx *= 2;
+				boby *= 2;
 				draw_screen();
 				if (db) {
 					vdp_swap();
@@ -376,6 +415,7 @@ void draw_screen()
 	}
 
 	draw_UI(true);
+	draw_bob(true,bobx,boby,xpos,ypos);
 }
 
 void draw_horizontal(int tx, int ty, int len)
@@ -548,10 +588,78 @@ void draw_UI(bool draw)
 	}
 }
 
-void draw_bob(bool draw)
+void draw_bob(bool draw, int bx, int by, int px, int py)
 {
 	if (!bShowBob) return;
 	if (draw) {
+		vdp_select_bitmap( gBobTileSet + bob_facing + bob_frame);
+		vdp_draw_bitmap( bx-px, by-py );
 	} else {
+		int tx=getTileX(bx);
+		int ty=getTileY(by);
+		int tposx = tx*gTileSize - px;
+		int tposy = ty*gTileSize - py;
+		vdp_select_bitmap( tilemap[ty*gMapWidth + tx] + gTileSet );
+		vdp_draw_bitmap( tposx, tposy );
+
+		vdp_select_bitmap( tilemap[ty*gMapWidth + tx + 1] + gTileSet );
+		vdp_draw_bitmap( tposx + gTileSize, tposy );
+
+		vdp_select_bitmap( tilemap[ (ty+1)*gMapWidth + tx] + gTileSet );
+		vdp_draw_bitmap( tposx, tposy + gTileSize );
+
+		vdp_select_bitmap( tilemap[ (ty+1)*gMapWidth + tx + 1] + gTileSet );
+		vdp_draw_bitmap( tposx + gTileSize, tposy + gTileSize );
 	}
+}
+
+void move_bob(int dir, int speed)
+{
+	int newx=bobx, newy=boby;
+
+	if ( bob_wait_ticks > clock() ) return;
+
+	//if (bob_facing != dir*4) bob_frame=0;
+	bob_facing = dir*4;
+
+	switch (dir) {
+		case BOB_LEFT:
+			if (bobx > speed) {
+				newx -= speed;
+			}
+			break;
+		case BOB_RIGHT:
+			if (bobx < gMapWidth*gTileSize - speed) {
+				newx += speed;
+			}
+			break;
+		case BOB_UP:
+			if (boby > speed) {
+				newy -= speed;
+			}
+			break;
+		case BOB_DOWN:
+			if (boby < gMapHeight*gTileSize - speed) {
+				newy += speed;
+			}
+			break;
+		default: break;
+	}
+	if (db)
+	{
+		draw_bob(false,bobx,boby,xpos,ypos);
+		draw_bob(true,newx,newy,xpos,ypos);
+		vdp_swap();
+	}
+	draw_bob(false,bobx,boby,xpos,ypos);
+	bobx=newx;
+	boby=newy;
+	draw_bob(true,newx,newy,xpos,ypos);
+
+	bob_wait_ticks = clock()+5;
+	
+	if (bob_anim_ticks > clock() ) return;
+	bob_frame=(bob_frame+1)%4; 
+	bob_anim_ticks = clock()+10;
+
 }
