@@ -1,4 +1,3 @@
-#include "globals.h"
 #include "colmap.h"
 
 #include "agon/vdp_vdu.h"
@@ -24,13 +23,26 @@ int gTileSize = 8;
 
 int gTileSet=0;
 
-#define RIGHT 0
-#define LEFT 1
-#define UP 2
-#define DOWN 3
+#define SCROLL_RIGHT 0
+#define SCROLL_LEFT 1
+#define SCROLL_UP 2
+#define SCROLL_DOWN 3
 
 #define COL(C) vdp_set_text_colour(C)
 #define TAB(X,Y) vdp_cursor_tab(X,Y)
+
+#define KEY_LEFT 0x9A
+#define KEY_RIGHT 0x9C
+#define KEY_UP 0x96
+#define KEY_DOWN 0x98
+#define KEY_w 0x2C
+#define KEY_a 0x16
+#define KEY_s 0x28
+#define KEY_d 0x19
+#define KEY_W 0x46
+#define KEY_A 0x30
+#define KEY_S 0x42
+#define KEY_D 0x33
 
 // Position of top-left of screen in world coords (pixel)
 int xpos=0, ypos=0;
@@ -81,6 +93,10 @@ int UIboxH=18;
 int UIpos[4];
 bool bShowUI=true;
 
+int bobX=0;
+int bobY=0;
+bool bShowBob=true;
+
 void wait()
 {
 	char k=getchar();
@@ -115,6 +131,12 @@ int main(/*int argc, char *argv[]*/)
 	UIpos[1]=gScreenHeight-UIboxH;
 	UIpos[3]=gScreenHeight-1;
 	
+	/* start screen centred */
+	xpos = gTileSize*(gMapWidth - gScreenWidth/gTileSize)/2; 
+	ypos = gTileSize*(gMapHeight - gScreenHeight/gTileSize)/2; 
+	bobX = xpos + gTileSize*(gScreenWidth/gTileSize)/2;
+	bobY = ypos + gTileSize*(gScreenHeight/gTileSize)/2;
+
 	// setup complete
 	vdp_mode(gMode + (db?128:0));
 	vdp_logical_scr_dims(false);
@@ -143,14 +165,14 @@ void game_loop()
 	}
 	do {
 		int dir=-1;
-		if ( vdp_check_key_press( 0x9a ) ) {dir=0; }	// right
-		if ( vdp_check_key_press( 0x9c ) ) {dir=1; }	// left
-		if ( vdp_check_key_press( 0x96 ) ) {dir=2; }	// up
-		if ( vdp_check_key_press( 0x98 ) ) {dir=3; }	// down
-		if ( vdp_check_key_press( 0x2C ) ) {dir=2; }	// up    W
-		if ( vdp_check_key_press( 0x16 ) ) {dir=0; }	// right A
-		if ( vdp_check_key_press( 0x28 ) ) {dir=3; }	// down  S
-		if ( vdp_check_key_press( 0x19 ) ) {dir=1; }	// left  D
+		if ( vdp_check_key_press( KEY_LEFT ) ) {dir=SCROLL_RIGHT; }
+		if ( vdp_check_key_press( KEY_RIGHT ) ) {dir=SCROLL_LEFT; }
+		if ( vdp_check_key_press( KEY_UP ) ) {dir=SCROLL_UP; }
+		if ( vdp_check_key_press( KEY_DOWN ) ) {dir=SCROLL_DOWN; }
+		if ( vdp_check_key_press( KEY_w ) || vdp_check_key_press( KEY_W ) ) {dir=SCROLL_UP; }
+		if ( vdp_check_key_press( KEY_a ) || vdp_check_key_press( KEY_A ) ) {dir=SCROLL_RIGHT; }
+		if ( vdp_check_key_press( KEY_s ) || vdp_check_key_press( KEY_S ) ) {dir=SCROLL_DOWN; }
+		if ( vdp_check_key_press( KEY_d ) || vdp_check_key_press( KEY_D ) ) {dir=SCROLL_LEFT; }
 		if (dir>=0) {
 			if (db) {
 				draw_UI(false);
@@ -332,6 +354,14 @@ void load_images()
 		sprintf(fname, "img/t16/tt%02d.rgb2",fn);
 		load_bitmap_file(fname, 16, 16, 64+fn-1);
 	}
+	for (int fn=1; fn<=16; fn++)
+	{
+		sprintf(fname, "img/b8/bob%02d.rgb2",fn);
+		//printf("load %s\n",fname);
+		load_bitmap_file(fname, 8, 8, 128+fn-1);
+		sprintf(fname, "img/b16/bob%02d.rgb2",fn);
+		load_bitmap_file(fname, 16, 16, 128+16+fn-1);
+	}
 }
 
 // draw full screen at World position in xpos/ypos
@@ -357,6 +387,7 @@ void draw_horizontal(int tx, int ty, int len)
 	{
 		vdp_select_bitmap( tilemap[ty*gMapWidth + tx+i] + gTileSet);
 		vdp_draw_bitmap( px + i*gTileSize, py );
+		vdp_update_key_state();
 	}
 	
 }
@@ -369,14 +400,15 @@ void draw_vertical(int tx, int ty, int len)
 	{
 		vdp_select_bitmap( tilemap[(ty+i)*gMapWidth + tx] + gTileSet);
 		vdp_draw_bitmap( px, py + i*gTileSize );
+		vdp_update_key_state();
 	}
 }
 
-/* 0=right, 1, left, 2=up, 3=down */
+/* 0=right, 1=left, 2=up, 3=down */
 void scroll_screen(int dir, int step, bool updatepos)
 {
 	switch (dir) {
-		case RIGHT:
+		case SCROLL_RIGHT: // scroll screen to right, view moves left
 			if (xpos > step)
 			{
 				xpos -= step;
@@ -388,7 +420,7 @@ void scroll_screen(int dir, int step, bool updatepos)
 				if (!updatepos) xpos += step;
 			}
 			break;
-		case LEFT:
+		case SCROLL_LEFT: // scroll screen to left, view moves right
 			if ((xpos + gScreenWidth + step) < (gMapWidth * gTileSize))
 			{
 				xpos += step;
@@ -400,7 +432,7 @@ void scroll_screen(int dir, int step, bool updatepos)
 				if (!updatepos) xpos -= step;
 			}
 			break;
-		case UP:
+		case SCROLL_UP:
 			if (ypos > step)
 			{
 				ypos -= step;
@@ -412,7 +444,7 @@ void scroll_screen(int dir, int step, bool updatepos)
 				if (!updatepos) ypos += step;
 			}
 			break;
-		case DOWN:
+		case SCROLL_DOWN:
 			if ((ypos + gScreenHeight + step) < (gMapHeight * gTileSize))
 			{
 				ypos += step;
@@ -492,9 +524,9 @@ void draw_UI(bool draw)
 {
 	if (!bShowUI) return;
 	if (draw) {
-		//vdp_set_graphics_colour(0,1);
-		//vdp_move_to(UIpos[0],UIpos[1]);
-		//vdp_filled_rect(UIpos[2],UIpos[3]);
+		vdp_set_graphics_colour(0,1);
+		vdp_move_to(UIpos[0],UIpos[1]);
+		vdp_filled_rect(UIpos[2],UIpos[3]);
 		vdp_set_graphics_colour(0,15);
 		for (int box=0;box<=UIboxes;box++)
 		{
@@ -513,5 +545,13 @@ void draw_UI(bool draw)
 		for (int ty=ty1; ty<=ty2; ty++) {
 			draw_horizontal(tx1, ty, 1+ (tx2-tx1) );
 		}
+	}
+}
+
+void draw_bob(bool draw)
+{
+	if (!bShowBob) return;
+	if (draw) {
+	} else {
 	}
 }
