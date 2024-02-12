@@ -216,7 +216,7 @@ void game_loop()
 			draw_UI(true);
 			draw_bob(true,bx,by,nx,ny);
 			
-			move_wait_ticks = clock() + 5;
+			//move_wait_ticks = clock() + 1;
 		}
 		if ( vdp_check_key_press( 0x26 ) || vdp_check_key_press( 0x2D ) ) exit=1; // q or x
 
@@ -621,6 +621,7 @@ void move_bob(int dir, int speed)
 
 	//if (bob_facing != dir*4) bob_frame=0;
 	bob_facing = dir*4;
+	speed *= (gTileSize/8);
 
 	switch (dir) {
 		case BOB_LEFT:
