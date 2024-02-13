@@ -44,6 +44,8 @@ uint8_t *world;
 uint8_t *tilemap;
 static bool bShowTile=true;
 float *noisemap;
+uint8_t *resmap;
+int resbm_off;
 
 FILE *open_file( const char *fname, const char *mode);
 int close_file( FILE *fp );
@@ -103,6 +105,7 @@ void populate_tilemap(GenParams *gp);
 void create_tileLU();
 
 void save_map();
+void combine_resource_map(void);
 
 bool bSaveNoiseOnly = false;
 
@@ -246,6 +249,7 @@ int main(int argc, char *argv[])
 
 	vdp_mode(MODE);
 	vdp_logical_scr_dims(false);
+	vdp_cursor_enable( false );
 
 	show_map();
 	// wait for a key press
@@ -269,9 +273,12 @@ int main(int argc, char *argv[])
 
 	game_loop();
 
+	vdp_cursor_enable( true );
+	vdp_logical_scr_dims( true );
 	free(tilemap);
 	free(genParams.filename);
 	free(world);
+	free(resmap);
 	return 0;
 }
 
@@ -296,6 +303,11 @@ void game_loop()
 			save_map();
 			draw_screen();
 		}
+		if ( vdp_check_key_press( 0x18 ) ||  vdp_check_key_press( 0x32 ) ) { // cC combine
+			combine_resource_map();
+			draw_screen();
+		}
+
 		//wait_clock(4);
 		vdp_update_key_state();
 	} while (exit==0);
@@ -344,6 +356,10 @@ void key_event_handler( KEY_EVENT key_event )
 {
 	if ( key_event.code == 0x7d ) {
 		vdp_cursor_enable( true );
+		vdp_logical_scr_dims( true );
+		free(tilemap);
+		free(world);
+		free(resmap);
 		exit( 1 );						// Exit program if esc pressed
 	}
 
@@ -420,6 +436,8 @@ void load_images()
 		//printf("load %s\n",fname);
 		load_bitmap_file(fname, TILESIZE,TILESIZE, fn-1);
 	}
+	resbm_off=24;
+	load_bitmap_file("img/r8/r1.rgb2", TILESIZE,TILESIZE, resbm_off);
 }
 
 uint8_t get_terrain_type(GenParams *gp, float val)
@@ -505,11 +523,17 @@ void draw_horizontal(int tx, int ty, int len)
 	{
 		if (bShowTile)
 		{
-			vdp_select_bitmap( tilemap[ty*gMapWidth + tx+i] );
+			vdp_select_bitmap( tilemap[ty*gMapWidth + tx+i] & 0x1F );
 		} else {
 			vdp_select_bitmap( world[ty*gMapWidth + tx+i] );
 		}
 		vdp_draw_bitmap( px + i*TILESIZE, py );
+		if (bShowTile &&  ((tilemap[ty*gMapWidth + tx+i] & 0xE0)>>5) > 0)
+		{
+			// show transparent resource over tile
+			vdp_select_bitmap(resbm_off - 1 + ((tilemap[ty*gMapWidth + tx+i] & 0xE0)>>5) );
+			vdp_draw_bitmap( px + i*TILESIZE, py );
+		}
 	}
 	
 }
@@ -522,11 +546,17 @@ void draw_vertical(int tx, int ty, int len)
 	{
 		if (bShowTile)
 		{
-			vdp_select_bitmap( tilemap[(ty+i)*gMapWidth + tx] );
+			vdp_select_bitmap( tilemap[(ty+i)*gMapWidth + tx] & 0x1F );
 		} else {
 			vdp_select_bitmap( world[(ty+i)*gMapWidth + tx] );
 		}
 		vdp_draw_bitmap( px, py + i*TILESIZE );
+		if (bShowTile &&  ((tilemap[(ty+i)*gMapWidth + tx] & 0xE0)>>5) > 0)
+		{
+			// show transparent resource over tile
+			vdp_select_bitmap( resbm_off - 1 + ((tilemap[(ty+i)*gMapWidth + tx] & 0xE0)>>5) );
+			vdp_draw_bitmap( px, py + i*TILESIZE );
+		}
 	}
 }
 
@@ -910,4 +940,46 @@ void load_noise_map(GenParams *gp)
 
 	printf("Done.  Return code %d.\n",ret);
 	return;
+}
+
+void combine_resource_map(void)
+{
+	char fname[100];
+	printf("Combine Resource Map\n\nEnter map name:");
+	scanf("%s", fname);
+	if (strlen(fname)==0)
+	{
+		return;
+	}
+	if (resmap==NULL)
+	{
+		resmap = malloc(gMapWidth*gMapHeight);
+		if (resmap==NULL)
+		{
+			printf("Error allocating resmap\n");
+			return;
+		}
+	}
+	uint8_t ret = mos_load(fname, (uint24_t) resmap, gMapWidth * gMapHeight);
+	if (ret != 0)
+	{
+		printf("Error loading resmap\n");
+		return;
+	}
+	char ttype[10];
+	int tt;
+	printf("Enter terr type to use (0-3) ");
+	scanf("%s",ttype);
+	tt = atoi(ttype);
+	if (tt<0 || tt>3) {
+		printf("Error tt=%d\n",tt);
+		return;
+	}
+	for (int i=0; i<gMapWidth*gMapHeight; i++)
+	{
+		if (resmap[i]==tt) {
+			tilemap[i] |= 1 << 5;
+		}
+	}
+	free(resmap);
 }
