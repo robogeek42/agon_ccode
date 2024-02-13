@@ -109,7 +109,8 @@ bool bSaveNoiseOnly = false;
 #define TILE_INFO_FILE "img/tileinfo.txt"
 int readTileInfoFile(char *path, TileInfoFile *tif, int items);
 
-void noise_map(GenParams *gp, char *fname);
+void save_noise_map(GenParams *gp);
+void load_noise_map(GenParams *gp);
 
 void wait()
 {
@@ -123,12 +124,12 @@ int main(int argc, char *argv[])
 	double mag = 0.2;
 	int octaves=0;
 	float threshold[3] = { -0.15, 0.00, 0.6 }; // defaults
-	char noisefilename[100];
 
 	if (argc <= 1 || (argc > 1 && strcmp(argv[1],"-h")==0)) {
 		printf("usage:\n %s .: [-h] ", argv[0]);
 		printf("[seed] [map width] [map height] [mag] [octaves] [thresholds ... ]\n");
-		printf("[seed] [map width] [map height] [mag] [octaves] -f <noise_map_name>\n");
+		printf("[seed] [map width] [map height] [mag] [octaves] -s \n");
+		printf("[seed] [map width] [map height] [mag] [octaves] -l \n");
 		printf("defaults:\n");
 		printf(" Seed: %d\n Map WxH (8x8 tiles): %dx%d\n Mag : %.2f\n Octaves: %d (off)\n Thresholds %.2f %.2f %.2f\n",
 				seed, gMapWidth, gMapHeight, mag, octaves, threshold[0], threshold[1], threshold[2]);
@@ -156,19 +157,11 @@ int main(int argc, char *argv[])
 	}
 
 	if (argc>6) {
-		threshold[0]=my_atof(argv[6]);
-		if (argv[6][0] == '-')
+		if (argv[6][0] == '-' && argv[6][1] == 's') 
 		{
-			if(argv[6][1] == 'f' && argc>7) 
-			{
-				strncpy(noisefilename, argv[7], 100);
-				bSaveNoiseOnly = true;
-			}
-			else
-			{
-				printf("error\n");
-				return -1;
-			}
+			bSaveNoiseOnly = true;
+		} else {
+			threshold[0]=my_atof(argv[6]);
 		}
 	}
 
@@ -198,17 +191,21 @@ int main(int argc, char *argv[])
 	genParams.world_arrsize = gMapWidth*gMapHeight ;
 
 	gen_menu(&genParams);
-	printf("Total heap space for maps : 2 x %dk\n",genParams.world_arrsize/1024);
 
-	// allocate world map array
-	world = (uint8_t *) malloc(sizeof(uint8_t) * gMapWidth * gMapHeight);
-	if (world == NULL)
+	if (!bSaveNoiseOnly)
 	{
-		printf("Out of memory\n");
-		return -1;
-	}
+		printf("Total heap space for maps : 2 x %dk\n",genParams.world_arrsize/1024);
 
-	genParams.world_addr = (uint24_t) world;
+		// allocate world map array
+		world = (uint8_t *) malloc(sizeof(uint8_t) * gMapWidth * gMapHeight);
+		if (world == NULL)
+		{
+			printf("Out of memory\n");
+			return -1;
+		}
+
+		genParams.world_addr = (uint24_t) world;
+	}
 
 	if (genParams.filename == NULL)
 	{
@@ -228,11 +225,17 @@ int main(int argc, char *argv[])
 		}
 		else
 		{
-			noise_map(&genParams, noisefilename);
+			save_noise_map(&genParams);
 			return 0;
 		}
 
 	} else {
+		if (bSaveNoiseOnly)
+		{
+			save_noise_map(&genParams);
+			return 0;
+		}
+
 		if ( !load_world_map(&genParams) )
 		{
 			printf("Error loading map.\n");
@@ -592,6 +595,15 @@ void get_filename(GenParams *gp, char *str)
 			gp->threshold[1],
 			gp->threshold[2]);
 }
+void get_filename_noisemap(GenParams *gp, char *str)
+{
+	sprintf(str,"maps/noisemap_%dx%d_%d_%.4lf_%d.data",
+			gp->width,
+			gp->height,
+			gp->seed,
+			gp->mag,
+			gp->octaves);
+}
 bool gen_menu(GenParams* gp)
 {
 	vdp_mode(3);
@@ -602,7 +614,7 @@ bool gen_menu(GenParams* gp)
 	printf("Octaves:\t%d\n",gp->octaves);
 	printf("Thresholds: %0.2f %0.2f %0.2f\n",gp->threshold[0],gp->threshold[1],gp->threshold[2]);
 	
-	char fname[200];
+	char fname[100];
 	get_filename(gp, fname);
 	printf("Check: %s\n",fname);
 	uint8_t fh = mos_fopen(fname, FA_READ);
@@ -850,9 +862,10 @@ void save_map()
 
 }
 
-void noise_map(GenParams *gp, char *fname)
+void save_noise_map(GenParams *gp)
 {
 	printf("create noise map %dx%d ... ", gMapWidth, gMapHeight);
+	printf("Total heap space %dk\n",sizeof(float)*gMapWidth*gMapHeight/1024);
 	noisemap = malloc(sizeof(float)*gMapWidth*gMapHeight);
 	if (noisemap==NULL)
 	{
@@ -873,9 +886,28 @@ void noise_map(GenParams *gp, char *fname)
 		vdp_update_key_state();
 		if ((iy % 8) == 7) { printf("."); }
 	}
+	char fname[100];
+	get_filename_noisemap(gp, fname);
 	// save the noise map
-	printf(" done. Saving ... ");
+	printf(" done. Saving %s ... ",fname);
 	uint8_t ret = mos_save( fname, (uint24_t) noisemap, gMapWidth * gMapHeight * sizeof(float) );
+	printf("Done.  \nReturn code %d.\n",ret);
+	return;
+}
+void load_noise_map(GenParams *gp)
+{
+	char fname[100];
+	get_filename_noisemap(gp, fname);
+	printf("load noise map %dx%d %s ... ", gMapWidth, gMapHeight, fname);
+	noisemap = malloc(sizeof(float)*gMapWidth*gMapHeight);
+	if (noisemap==NULL)
+	{
+		printf("Error allocating noisemap\n");
+		return;
+	}
+
+	uint8_t ret = mos_load(fname, (uint24_t) noisemap, gMapWidth * gMapHeight * sizeof(float));
+
 	printf("Done.  Return code %d.\n",ret);
 	return;
 }
