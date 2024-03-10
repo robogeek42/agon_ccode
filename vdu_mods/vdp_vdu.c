@@ -63,6 +63,7 @@ static VDU_A_n vdu_mode = { 22, 0 };
 static VDU_A_x_y vdu_graphics_origin = { 29, 0, 0 };
 static VDU_A vdu_cursor_home = { 30 };
 static VDU_A_c_r vdu_cursor_tab = { 31, 0, 0 };
+static VDU_A_B_CMD vdu_swap = { 23, 0, 195 };
 
 void vdp_write_at_text_cursor( void ) { VDP_PUTS( vdu_write_at_text_cursor ); }
 void vdp_write_at_graphics_cursor( void ) { VDP_PUTS( vdu_write_at_graphics_cursor ); }
@@ -79,6 +80,7 @@ void vdp_clear_graphics( void ) { VDP_PUTS( vdu_clear_graphics ); }
 void vdp_reset_graphics( void ) { VDP_PUTS( vdu_reset_graphics ); }
 void vdp_disable_screen( void ) { VDP_PUTS( vdu_disable_screen ); }
 void vdp_cursor_home( void ) { VDP_PUTS( vdu_cursor_home ); }
+void vdp_swap( void ) { VDP_PUTS( vdu_swap ); }
 
 // rg: fixed this so it is X, Y
 void vdp_cursor_tab( int col, int row )
