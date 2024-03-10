@@ -132,7 +132,9 @@ static VDU_A_B_CMD vdu_get_scr_dims = { 23, 0, 0x86 };
 static VDU_A_B_CMD_n vdu_set_logical_scr_dims = { 23, 0, 0xC0, 0 }; 
 static VDU_A_CMD_n vdu_cursor_enable = { 23, 1, 0 };
 static VDU_A_l_r_g_b vdu_scroll_screen = {23, 7, 1, 0, 0};
+static VDU_A_B_CMD vdu_swap = { 23, 0, 0xC0 };
 
+void vdp_swap( void ) { VDP_PUTS( vdu_swap ); }
 void vdp_redefine_character( int chnum, uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3, uint8_t b4, uint8_t b5, uint8_t b6, uint8_t b7 )
 {
 	vdu_redefine_character.B = chnum;

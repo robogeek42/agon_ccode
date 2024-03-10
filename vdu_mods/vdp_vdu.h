@@ -36,6 +36,7 @@ void vdp_define_colour (int logical, int red, int green, int blue );
 void vdp_graphics_origin( int x, int y );
 int vdp_mode( int mode );
 void vdp_get_scr_dims( bool );
+void vdp_swap( void );
 void vdp_redefine_character( int chnum, uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3, uint8_t b4, uint8_t b5, uint8_t b6, uint8_t b7 );
 void vdp_logical_scr_dims( bool );
 void vdp_cursor_enable( bool flag );
