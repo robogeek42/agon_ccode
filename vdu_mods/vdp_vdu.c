@@ -485,7 +485,6 @@ void vdp_reset_sprites( void )
 /* Advanced buffered commands (selected) */
 
 static VDU_ADV_CMD_ui16 vdu_adv_write_block  = { 23, 0, 0xA0, 0xFA00, 0, 0};
-//static VDU_ADV_CMD      vdu_adv_call_buffer  = { 23, 0, 0xA0, 0xFA00, 1};
 static VDU_ADV_CMD      vdu_adv_clear_buffer = { 23, 0, 0xA0, 0xFA00, 2};
 static VDU_ADV_CMD_ui16 vdu_adv_create       = { 23, 0, 0xA0, 0xFA00, 3, 0};
 static VDU_ADV_CMD      vdu_adv_stream       = { 23, 0, 0xA0, 0xFA00, 4};
@@ -503,14 +502,6 @@ void vdp_adv_write_block(int bufferID, int length)
 	vdu_adv_write_block.ui16 = length;
 	VDP_PUTS(vdu_adv_write_block);
 }
-
-/*
-void vdp_adv_call_buffer(int bufferID)
-{
-	vdu_adv_call_buffer.BID = bufferID;
-	VDP_PUTS(vdu_adv_call_buffer);
-}
-*/
 
 void vdp_adv_clear_buffer(int bufferID)
 {
@@ -562,7 +553,7 @@ void vdp_adv_bitmap_from_buffer(int width, int height, int format)
 }
 
 // helper function
-// load images using absolute numbered bitmaps
+// load images using absolute numbered bitmaps (24-bit)
 int vdp_adv_load_sprite_bitmaps( const char *fname_prefix, const char *fname_format,
 						int width, int height, int num, int bitmap_num )
 {
@@ -588,7 +579,7 @@ int vdp_adv_load_sprite_bitmaps( const char *fname_prefix, const char *fname_for
 	return cnt;
 }
 
-// select bitmap for sprite using offset from 0
+// select bitmap for sprite using absolute numbered bitmaps (24-bit)
 void vdp_adv_add_sprite_bitmap( int b )
 {
 	vdu_adv_add_sprite_bitmap.b = b;
@@ -596,7 +587,7 @@ void vdp_adv_add_sprite_bitmap( int b )
 }
 
 
-// create a sprite using a bitmap numbered from 0 (instead of 0xFA00)
+// create a sprite using absolute numbered bitmaps (24-bit)
 void vdp_adv_create_sprite( int sprite, int bitmap_num, int frames )
 {
 	vdu_sprite_select.n = sprite;
