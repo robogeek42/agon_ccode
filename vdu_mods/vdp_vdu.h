@@ -32,7 +32,7 @@ void vdp_cursor_tab( int row, int col );
 void vdp_set_text_colour( int colour );
 void vdp_set_graphics_colour( int mode, int colour );
 #define vdp_gcol( M, C ) vdp_set_graphics_colour( M, C )
-void vdp_define_colour (int logical, int red, int green, int blue );
+void vdp_define_colour(int logical, int physical, int red, int green, int blue );
 void vdp_graphics_origin( int x, int y );
 int vdp_mode( int mode );
 void vdp_swap( void );
@@ -47,6 +47,7 @@ void vdp_reset_viewports( void );
 void vdp_set_graphics_viewport( int left, int bottom, int right, int top );
 void vdp_set_text_viewport( int left, int bottom, int right, int top );
 
+void vdp_plot( int plot_mode, int x, int y );
 void vdp_move_to( int x, int y );
 void vdp_line_to( int x, int y );
 void vdp_point( int x, int y );
@@ -91,6 +92,18 @@ void vdp_adv_bitmap_from_buffer(int width, int height, int format);
 int vdp_adv_load_sprite_bitmaps( const char *fname_prefix, const char *fname_format, int width, int height, int num, int bitmap_num );
 void vdp_adv_add_sprite_bitmap( int b );
 void vdp_adv_create_sprite( int sprite, int bitmap_num, int frames );
+
+void vdp_play_note( int channel, int volume, int frequency, int duration);
+void vdp_audio_status( int channel );
+void vdp_audio_set_volume( int channel, int volume );
+void vdp_audio_set_frequency( int channel, int frequency );
+void vdp_audio_set_waveform( int channel, int waveform );
+void vdp_audio_set_sample( int channel, int bufferID );
+// commands 5 and 6 todo
+void vdp_audio_enable_channel( int channel );
+void vdp_audio_disable_channel( int channel );
+void vdp_audio_reset_channel( int channel );
+
 
 #ifdef __cplusplus
 }
