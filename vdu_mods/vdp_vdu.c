@@ -662,24 +662,36 @@ void vdp_adv_create_sprite( int sprite, int bitmap_num, int frames )
 typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t channel; uint8_t CMD; } VDU_AUDIO_CMD;
 typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t channel; uint8_t CMD; uint8_t b1; } VDU_AUDIO_CMD_B;
 typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t channel; uint8_t CMD; uint16_t w1; } VDU_AUDIO_CMD_W;
-typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t channel; uint8_t CMD; uint8_t b1; uint16_t w1; } VDU_AUDIO_CMD_B_W;
-typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t channel; uint8_t CMD; uint8_t b1; uint16_t w1; uint16_t w2; } VDU_AUDIO_CMD_B_W_W;
+typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t channel; uint8_t CMD; uint8_t b1; uint16_t w2; } VDU_AUDIO_CMD_B_W;
+typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t channel; uint8_t CMD; uint8_t b1; uint16_t w2; uint8_t b3; } VDU_AUDIO_CMD_B_W_B;
+typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t channel; uint8_t CMD; uint8_t b1; uint16_t w2; uint16_t w3; } VDU_AUDIO_CMD_B_W_W;
+typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t channel; uint8_t CMD; uint8_t b1; uint16_t w2; uint16_t w3; uint8_t b4; uint16_t w5; } VDU_AUDIO_CMD_B_W_W_B_W;
+typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t sample; uint8_t CMD; uint8_t TYPE; uint24_t length; } VDU_AUDIO_LOAD_SAMPLE;
+typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t sample; uint8_t CMD; uint8_t b1; uint24_t ww2; } VDU_AUDIO_CMD_B_WW;
+typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t sample; uint8_t CMD; uint8_t b1; uint16_t w2; uint24_t ww3; } VDU_AUDIO_CMD_B_W_WW;
+typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t channel; uint8_t CMD; uint8_t b1; uint8_t b2; uint8_t b3; uint16_t w4; } VDU_AUDIO_CMD_B_B_B_W;
 
 static VDU_AUDIO_CMD vdu_audio = { 23, 0, 0x85, 0, 0 };
 static VDU_AUDIO_CMD_B vdu_audio_b = { 23, 0, 0x85, 0, 0, 0 };
 static VDU_AUDIO_CMD_W vdu_audio_w = { 23, 0, 0x85, 0, 0, 0 };
 static VDU_AUDIO_CMD_B_W vdu_audio_b_w = { 23, 0, 0x85, 0, 0, 0, 0 };
+static VDU_AUDIO_CMD_B_W_B vdu_audio_b_w_b = { 23, 0, 0x85, 0, 0, 0, 0, 0 };
 static VDU_AUDIO_CMD_B_W_W vdu_audio_b_w_w = { 23, 0, 0x85, 0, 0, 0, 0, 0 };
+static VDU_AUDIO_CMD_B_W_W_B_W vdu_audio_b_w_w_b_w = { 23, 0, 0x85, 0, 0, 0, 0, 0, 0, 0 };
+static VDU_AUDIO_LOAD_SAMPLE vdu_audio_load_sample = { 23, 0, 0x85, 0, 5, 0, 0 };
+static VDU_AUDIO_CMD_B_WW vdu_audio_b_ww = { 23, 0, 0x85, 0, 0, 0, 0 };
+static VDU_AUDIO_CMD_B_W_WW vdu_audio_b_w_ww = { 23, 0, 0x85, 0, 0, 0, 0, 0 };
+static VDU_AUDIO_CMD_B_B_B_W vdu_audio_b_b_b_w = { 23, 0, 0x85, 0, 7, 1, 0, 0, 0 };
 
 // Command 0: Play note 
 // 	VDU 23, 0, &85, channel, 0, volume, frequency; duration;
-void vdp_play_note( int channel, int volume, int frequency, int duration)
+void vdp_audio_play_note( int channel, int volume, int frequency, int duration)
 {
 	vdu_audio_b_w_w.channel = channel;
 	vdu_audio_b_w_w.CMD = 0;
 	vdu_audio_b_w_w.b1 = volume;
-	vdu_audio_b_w_w.w1 = frequency;
-	vdu_audio_b_w_w.w2 = duration;
+	vdu_audio_b_w_w.w2 = frequency;
+	vdu_audio_b_w_w.w3 = duration;
        	VDP_PUTS( vdu_audio_b_w_w ); 
 }
 
@@ -712,26 +724,195 @@ void vdp_audio_set_frequency( int channel, int frequency )
        	VDP_PUTS( vdu_audio_w ); 
 }
 
-// Command 4: Set waveform
+// Command 4 (types 0-5): Set waveform
 //	VDU 23, 0, &85, channel, 4, waveformOrSample, [bufferId;]
 void vdp_audio_set_waveform( int channel, int waveform )
 {
-	// only for waveforms 0-7, use vdp_audio_set_sample otherwise
+	// only for waveforms 0-5, use vdp_audio_set_sample for 8,-1
 	vdu_audio_b.channel = channel;
 	vdu_audio_b.CMD = 4;
 	vdu_audio_b.b1 = waveform;
        	VDP_PUTS( vdu_audio_b ); 
 }
+// Command 4 (type 8): Set sample
 void vdp_audio_set_sample( int channel, int bufferID )
 {
-	// only for waveforms 0-7, use vdp_audio_set_sample otherwise
+	// only for waveforms 8,-1, use vdp_audio_set_waveform otherwise
 	vdu_audio_b_w.channel = channel;
 	vdu_audio_b_w.CMD = 4;
 	vdu_audio_b_w.b1 = 8; // waveform=8 is sample
-	vdu_audio_b_w.w1 = bufferID;
+	vdu_audio_b_w.w2 = bufferID;
        	VDP_PUTS( vdu_audio_b_w ); 
 }
 
+// Command 5: Sample management
+// 	VDU 23, 0, &85, channelOrSample, 5, sampleCommand, [parameters]
+//	Command 5, 0: Load sample
+//		VDU 23, 0, &85, sample, 5, 0, length; lengthHighByte, <sampleData>
+//		the sample data is assumed to be 8-bit signed PCM samples at 16kHz
+void vdp_audio_load_sample( int sample, int length, uint8_t *data)
+{
+	vdu_audio_load_sample.sample = sample;
+	vdu_audio_load_sample.length = length;
+	VDP_PUTS( vdu_audio_load_sample );
+
+	int size;
+	char *ptr = (char *)data;
+	for ( size = length; size > LOAD_BMAP_BLOCK; size -= LOAD_BMAP_BLOCK ) {
+		mos_puts( (char *)ptr, LOAD_BMAP_BLOCK, 0 );
+		ptr += LOAD_BMAP_BLOCK;
+	}
+	mos_puts( (char *)ptr, size, 0 );
+}
+
+// 	Command 5, 1: Clear sample
+//		VDU 23, 0, &85, sample, 5, 1
+void vdp_audio_clear_sample( int sample )
+{
+	vdu_audio_b.channel = sample;
+	vdu_audio_b.CMD = 5;
+	vdu_audio_b.b1 = 1;
+       	VDP_PUTS( vdu_audio_b ); 
+}
+
+//	Command 5, 2: Create a sample from a buffer
+//		VDU 23, 0, &85, channel, 5, 2, bufferId; format, [sampleRate;]
+void vdp_audio_create_sample_from_buffer( int channel, int bufferID, int format)
+{
+	vdu_audio_b_w_b.channel = channel;
+	vdu_audio_b_w_b.CMD = 5;
+	vdu_audio_b_w_b.b1 = 2;
+	vdu_audio_b_w_b.w2 = bufferID;
+	vdu_audio_b_w_b.b3 = format;
+	VDP_PUTS( vdu_audio_b_w_b );
+}
+
+//	Command 5, 3: Set sample base frequency
+//		VDU 23, 0, &85, sample, 5, 3, frequency;
+void vdp_audio_set_sample_frequency( int sample, int frequency )
+{
+	vdu_audio_b_w.channel = sample;
+	vdu_audio_b_w.CMD = 5;
+	vdu_audio_b_w.b1 = 3;
+	vdu_audio_b_w.w2 = frequency;
+	VDP_PUTS( vdu_audio_b_w );
+}
+
+//	Command 5, 4: Set sample frequency for a sample by buffer ID
+//		VDU 23, 0, &85, channel, 5, 4, bufferId; frequency;
+void vdp_audio_set_buffer_frequency( int channel, int bufferID, int frequency )
+{
+	vdu_audio_b_w_w.channel = channel;
+	vdu_audio_b_w_w.CMD = 5;
+	vdu_audio_b_w_w.b1 = 4;
+	vdu_audio_b_w_w.w2 = bufferID;
+	vdu_audio_b_w_w.w3 = frequency;
+	VDP_PUTS( vdu_audio_b_w_w );
+}
+
+//	Command 5, 5: Set sample repeat start point
+//		VDU 23, 0, &85, sample, 5, 5, repeatStart; repeatStartHighByte
+void vdp_audio_set_sample_repeat_start( int sample, int repeatStart )
+{
+	vdu_audio_b_ww.sample = sample;
+	vdu_audio_b_ww.CMD = 5;
+	vdu_audio_b_ww.b1 = 5;
+	vdu_audio_b_ww.ww2 = repeatStart;
+	VDP_PUTS( vdu_audio_b_ww );
+}
+
+//	Command 5, 6: Set sample repeat start point by buffer ID
+//		VDU 23, 0, &85, channel, 5, 6, bufferId; repeatStart; repeatStartHighByte
+void vdp_audio_set_buffer_repeat_start( int channel, int bufferID, int repeatStart )
+{
+	vdu_audio_b_w_ww.sample = channel;
+	vdu_audio_b_w_ww.CMD = 5;
+	vdu_audio_b_w_ww.b1 = 6;
+	vdu_audio_b_w_ww.w2 = bufferID;
+	vdu_audio_b_w_ww.ww3 = repeatStart;
+	VDP_PUTS( vdu_audio_b_w_ww );
+}
+
+//	Command 5, 7: Set sample repeat length
+//		VDU 23, 0, &85, sample, 5, 7, repeatLength; repeatLengthHighByte
+void vdp_audio_set_sample_repeat_length( int sample, int repeatLength )
+{
+	vdu_audio_b_ww.sample = sample;
+	vdu_audio_b_ww.CMD = 5;
+	vdu_audio_b_ww.b1 = 7;
+	vdu_audio_b_ww.ww2 = repeatLength;
+	VDP_PUTS( vdu_audio_b_ww );
+}
+
+//	Command 5, 8: Set sample repeat length by buffer ID
+//		VDU 23, 0, &85, channel, 5, 8, bufferId; repeatLength; repeatLengthHighByte
+void vdp_audio_set_buffer_repeat_length( int channel, int bufferID, int repeatLength )
+{
+	vdu_audio_b_w_ww.sample = channel;
+	vdu_audio_b_w_ww.CMD = 5;
+	vdu_audio_b_w_ww.b1 = 8;
+	vdu_audio_b_w_ww.w2 = bufferID;
+	vdu_audio_b_w_ww.ww3 = repeatLength;
+	VDP_PUTS( vdu_audio_b_w_ww );
+}
+
+// Command 6: Volume envelope. Type 0: Disable
+//	VDU 23, 0, &85, channel, 6, type, [parameters]
+void vdp_audio_volume_envelope_disable( int channel )
+{
+	vdu_audio_b.channel = channel;
+	vdu_audio_b.CMD = 6;
+	vdu_audio_b.b1 = 0;
+       	VDP_PUTS( vdu_audio_b ); 
+}
+// Command 6: Volume envelope. Type 1: ADSR
+// 	VDU 23, 0, &85, channel, 6, 1, attack; decay; sustain, release;
+void vdp_audio_volume_envelope_ADSR( int channel, int attack, int decay, int sustain, int release )
+{
+	vdu_audio_b_w_w_b_w.channel = channel;
+	vdu_audio_b_w_w_b_w.CMD = 6;
+	vdu_audio_b_w_w_b_w.b1 = 1;
+	vdu_audio_b_w_w_b_w.w2 = attack;
+	vdu_audio_b_w_w_b_w.w3 = decay;
+	vdu_audio_b_w_w_b_w.b4 = sustain;
+	vdu_audio_b_w_w_b_w.w5 = release;
+	VDP_PUTS( vdu_audio_b_w_w_b_w );
+}
+// Command 6: Volume envelope. Type 2: Multi-phase ADSR
+// 	VDU 23, 0, &85, channel, 6, 2, attackCount, [level, duration;]*, sustainCount, [level, duration;]*, releaseCount, [level, duration;]*
+// 	variable length parameters - leave to user to send separately
+void vdp_audio_volume_envelope_multiphase_ADSR( int channel )
+{
+	vdu_audio_b.channel = channel;
+	vdu_audio_b.CMD = 6;
+	vdu_audio_b.b1 = 2;
+       	VDP_PUTS( vdu_audio_b ); 
+}
+
+// Command 7: Frequency envelope
+//	VDU 23, 0, &85, channel, 7, type, [parameters]
+// 	Type 0: None
+//		VDU 23, 0, &85, channel, 7, 0
+void vdp_audio_frequency_envelope_disable( int channel )
+{
+	vdu_audio_b.channel = channel;
+	vdu_audio_b.CMD = 7;
+	vdu_audio_b.b1 = 0;
+       	VDP_PUTS( vdu_audio_b ); 
+}
+
+//	Type 1: Stepped frequency envelope
+//		VDU 23, 0, &85, channel, 7, 1, phaseCount, controlByte, stepLength; [phase1Adjustment; phase1NumberOfSteps; phase2Adjustment; phase2NumberOfSteps; ...]
+void vdp_audio_frequency_envelope_stepped( int channel, int phaseCount, int controlByte, int stepLength )
+{
+	vdu_audio_b_b_b_w.channel = channel;
+	vdu_audio_b_b_b_w.CMD = 7;
+	vdu_audio_b_b_b_w.b1 = 1;
+	vdu_audio_b_b_b_w.b2 = phaseCount;
+	vdu_audio_b_b_b_w.b3 = controlByte;
+	vdu_audio_b_b_b_w.w4 = stepLength;
+       	VDP_PUTS( vdu_audio_b_b_b_w ); 
+}
 
 // Command 8: Enable Channel
 // 	VDU 23, 0, &85, channel, 8

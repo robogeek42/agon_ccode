@@ -93,13 +93,41 @@ int vdp_adv_load_sprite_bitmaps( const char *fname_prefix, const char *fname_for
 void vdp_adv_add_sprite_bitmap( int b );
 void vdp_adv_create_sprite( int sprite, int bitmap_num, int frames );
 
-void vdp_play_note( int channel, int volume, int frequency, int duration);
+void vdp_audio_play_note( int channel, int volume, int frequency, int duration);
 void vdp_audio_status( int channel );
 void vdp_audio_set_volume( int channel, int volume );
 void vdp_audio_set_frequency( int channel, int frequency );
+#define VDP_AUDIO_WAVEFORM_SQUARE 0
+#define VDP_AUDIO_WAVEFORM_TRIANGLE 1
+#define VDP_AUDIO_WAVEFORM_SAWTOOTH 2
+#define VDP_AUDIO_WAVEFORM_SINEWAVE 3
+#define VDP_AUDIO_WAVEFORM_NOISE 4
+#define VDP_AUDIO_WAVEFORM_VICNOISE 5
 void vdp_audio_set_waveform( int channel, int waveform );
 void vdp_audio_set_sample( int channel, int bufferID );
-// commands 5 and 6 todo
+void vdp_audio_load_sample( int sample, int length, uint8_t *data);
+void vdp_audio_clear_sample( int sample );
+#define VDP_AUDIO_SAMPLE_FORMAT_8BIT_SIGNED 0
+#define VDP_AUDIO_SAMPLE_FORMAT_8BIT_UNSIGNED 1
+#define VDP_AUDIO_SAMPLE_FORMAT_SAMPLE_RATE_FOLLOWS 8
+#define VDP_AUDIO_SAMPLE_FORMAT_SAMPLE_TUNEABLE 8
+void vdp_audio_create_sample_from_buffer( int channel, int bufferID, int format);
+void vdp_audio_set_sample_frequency( int sample, int frequency );
+void vdp_audio_set_buffer_frequency( int channel, int bufferID, int frequency );
+void vdp_audio_set_sample_repeat_start( int sample, int repeatStart );
+void vdp_audio_set_buffer_repeat_start( int channel, int bufferID, int repeatStart );
+void vdp_audio_set_sample_repeat_length( int sample, int repeatLength );
+void vdp_audio_set_buffer_repeat_length( int channel, int bufferID, int repeatLength );
+
+void vdp_audio_volume_envelope_disable( int channel );
+void vdp_audio_volume_envelope_ADSR( int channel, int attack, int decay, int sustain, int release );
+void vdp_audio_volume_envelope_multiphase_ADSR( int channel ); // variable length parameters to be send separately
+void vdp_audio_frequency_envelope_disable( int channel );
+#define VDP_AUDIO_FREQ_ENVELOPE_CONTROL_REPEATS 1
+#define VDP_AUDIO_FREQ_ENVELOPE_CONTROL_CUMULATIVE 2
+#define VDP_AUDIO_FREQ_ENVELOPE_CONTROL_RESTRICT 4
+void vdp_audio_frequency_envelope_stepped( int channel, int phaseCount, int controlByte, int stepLength );
+
 void vdp_audio_enable_channel( int channel );
 void vdp_audio_disable_channel( int channel );
 void vdp_audio_reset_channel( int channel );
