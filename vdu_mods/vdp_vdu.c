@@ -43,6 +43,9 @@ volatile SYSVAR *vdp_vdu_init( void )
 
 // Basic VDU commands
 
+static VDU_A_n vdu_send_to_printer = { 1, 0 };
+static VDU_A vdu_enable_printer = { 2 };
+static VDU_A vdu_disable_printer = { 3 };
 static VDU_A vdu_write_at_text_cursor = { 4 };
 static VDU_A vdu_write_at_graphics_cursor = { 5 };
 static VDU_A vdu_enable_screen = { 6 };
@@ -52,6 +55,7 @@ static VDU_A vdu_cursor_right = { 9 };
 static VDU_A vdu_cursor_down = { 10 };
 static VDU_A vdu_cursor_up = { 11 };
 static VDU_A vdu_clear_screen = { 12 };
+static VDU_A vdu_carriage_return = { 13 };
 static VDU_A vdu_page_mode_on = { 14 };
 static VDU_A vdu_page_mode_off = { 15 };
 static VDU_A vdu_clear_graphics = { 16 };
@@ -66,6 +70,8 @@ static VDU_A vdu_cursor_home = { 30 };
 static VDU_A_c_r vdu_cursor_tab = { 31, 0, 0 };
 static VDU_A_B_CMD vdu_swap = { 23, 0, 195 };
 
+void vdp_enable_printer( void ) { VDP_PUTS( vdu_enable_printer ); }
+void vdp_disable_printer( void ) { VDP_PUTS( vdu_disable_printer ); }
 void vdp_write_at_text_cursor( void ) { VDP_PUTS( vdu_write_at_text_cursor ); }
 void vdp_write_at_graphics_cursor( void ) { VDP_PUTS( vdu_write_at_graphics_cursor ); }
 void vdp_enable_screen( void ) { VDP_PUTS( vdu_enable_screen ); }
@@ -75,6 +81,7 @@ void vdp_cursor_right( void ) { VDP_PUTS( vdu_cursor_right ); }
 void vdp_cursor_down( void ) { VDP_PUTS( vdu_cursor_down ); }
 void vdp_cursor_up( void ) { VDP_PUTS( vdu_cursor_up ); }
 void vdp_clear_screen( void ) { VDP_PUTS( vdu_clear_screen ); }
+void vdp_carriage_return( void ) { VDP_PUTS( vdu_carriage_return ); }
 void vdp_page_mode_on( void ) { VDP_PUTS( vdu_page_mode_on ); }
 void vdp_page_mode_off( void ) { VDP_PUTS( vdu_page_mode_off ); }
 void vdp_clear_graphics( void ) { VDP_PUTS( vdu_clear_graphics ); }
@@ -82,6 +89,12 @@ void vdp_reset_graphics( void ) { VDP_PUTS( vdu_reset_graphics ); }
 void vdp_disable_screen( void ) { VDP_PUTS( vdu_disable_screen ); }
 void vdp_cursor_home( void ) { VDP_PUTS( vdu_cursor_home ); }
 void vdp_swap( void ) { VDP_PUTS( vdu_swap ); }
+
+void vdp_send_to_printer( char ch )
+{
+	vdu_send_to_printer.n = ch;
+	VDP_PUTS( vdu_send_to_printer );
+}
 
 // rg: fixed this so it is X, Y
 void vdp_cursor_tab( int col, int row )
@@ -135,10 +148,14 @@ static VDU_A_B_ui8x8 vdu_redefine_character = { 23, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 static VDU_A_B_CMD vdu_get_scr_dims = { 23, 0, 0x86 };
 static VDU_A_B_CMD_n vdu_set_logical_scr_dims = { 23, 0, 0xC0, 0 }; 
 static VDU_A_CMD_n vdu_cursor_enable = { 23, 1, 0 };
-static VDU_A_a_b_c_d vdu_scroll_screen = {23, 7, 1, 0, 0};
+static VDU_A_B_ui8x8 vdu_set_dotted_line_pattern = { 23, 6, 0, 0, 0, 0, 0, 0, 0, 0 };
+static VDU_A_a_b_c_d vdu_scroll_screen = { 23, 7, 1, 0, 0};
+static VDU_A_CMD_n vdu_cursor_behaviour = { 23, 16, 0, 0 };
+static VDU_A_CMD vdu_set_line_thickness = { 23, 23, 0 };
 
 void vdp_redefine_character( int chnum, uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3, uint8_t b4, uint8_t b5, uint8_t b6, uint8_t b7 )
 {
+	if ( chnum < 32 || chnum > 255 ) return;
 	vdu_redefine_character.B = chnum;
 	vdu_redefine_character.b0 = b0;
 	vdu_redefine_character.b1 = b1;
@@ -150,7 +167,34 @@ void vdp_redefine_character( int chnum, uint8_t b0, uint8_t b1, uint8_t b2, uint
 	vdu_redefine_character.b7 = b7;
 	VDP_PUTS( vdu_redefine_character );
 }
+void vdp_set_dotted_line_pattern( uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3, uint8_t b4, uint8_t b5, uint8_t b6, uint8_t b7 )
+{
+	vdu_set_dotted_line_pattern.b0 = b0;
+	vdu_set_dotted_line_pattern.b1 = b1;
+	vdu_set_dotted_line_pattern.b2 = b2;
+	vdu_set_dotted_line_pattern.b3 = b3;
+	vdu_set_dotted_line_pattern.b4 = b4;
+	vdu_set_dotted_line_pattern.b5 = b5;
+	vdu_set_dotted_line_pattern.b6 = b6;
+	vdu_set_dotted_line_pattern.b7 = b7;
+	VDP_PUTS( vdu_set_dotted_line_pattern );
+}
 
+void vdp_cursor_behaviour( int setting, int mask )
+{
+	vdu_cursor_behaviour.CMD = setting;
+	vdu_cursor_behaviour.n = mask;
+	VDP_PUTS( vdu_cursor_behaviour );
+}
+
+void vdp_set_line_thickness( int pixels )
+{
+	vdu_set_line_thickness.CMD = pixels;
+	VDP_PUTS( vdu_set_line_thickness );
+}
+
+// Helper function to get screen dimensions
+// results returned in sys_vars
 void vdp_get_scr_dims( bool wait )
 {
 	if ( !sys_vars ) vdp_vdu_init();
@@ -197,6 +241,7 @@ void vdp_scroll_screen( int direction, int speed )
 
 static VDU_A vdu_reset_viewports = { 26 };
 static VDU_A_ui16x4 vdu_set_graphics_viewport = { 24, 0, 0, 0, 0 };
+static VDU_A_n vdu_send_to_screen = { 27, 0 };
 static VDU_A_a_b_c_d vdu_set_text_viewport = { 28, 0, 0, 0, 0 };
 
 void vdp_reset_viewports( void ) { VDP_PUTS( vdu_reset_viewports ); }
@@ -215,6 +260,11 @@ void vdp_set_text_viewport( int left, int bottom, int right, int top )
 	vdu_set_text_viewport.c = right;
 	vdu_set_text_viewport.d = top;
 	VDP_PUTS( vdu_set_text_viewport );
+}
+void vdp_send_to_screen( char ch )
+{
+	vdu_send_to_screen.n = ch;
+	VDP_PUTS( vdu_send_to_screen );
 }
 
 // VDU 25 - plot command
@@ -419,6 +469,7 @@ void vdp_create_sprite( int sprite, int bitmap_num, int frames )
 		VDP_PUTS( vdu_sprite_add_bitmap );
 	}
 	vdu_sprite_activate.n = sprite;
+	VDP_PUTS( vdu_sprite_activate );
 }
 
 void vdp_select_sprite( int n )
@@ -609,6 +660,7 @@ void vdp_adv_create_sprite( int sprite, int bitmap_num, int frames )
 		vdp_adv_add_sprite_bitmap( bitmap_num++ );
 	}
 	vdu_sprite_activate.n = sprite;
+	VDP_PUTS( vdu_sprite_activate );
 }
 
 // Audio API
