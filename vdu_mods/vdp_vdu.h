@@ -109,15 +109,43 @@ void vdp_cursor_tab( int row, int col );
 // Many of these are not yet implemented here
 
 // VDU 23, 0, &0A, n: Set cursor start line and appearance
+void vdp_set_cursor_start_line( int n );
+
 // VDU 23, 0, &0B, n: Set cursor end line
+void vdp_set_cursor_end_line( int n );
+
 // VDU 23, 0, &81, n: Set the keyboard locale
+void vdp_set_keyboard_locale( int locale );
+
 // VDU 23, 0, &82: Request text cursor position
+//   Helper function to request cursor position and wait for results if asked
+//   Results are in sys_vars
+void vdp_get_text_cursor_position( bool wait );
+//   Helper function to read and return cursor X,Y position.
+void vdp_read_text_cursor_position( uint8_t* return_x, uint8_t* return_y );
+
 // VDU 23, 0, &83, x; y;: Get ASCII code of character at character position x, y
+//   Helper function to request the character at x, y and wait if asked.
+//   Results are in sys_vars
+void vdp_get_ascii_code_at_position( bool wait );
+//   Helper function to return the character at x, y
+uint8_t vdp_read_ascii_code_at_position( int x, int y );
+
 // VDU 23, 0, &84, x; y;: Get colour of pixel at pixel position x, y
+void vdp_get_pixel_colour( int x, int y );
+//   Helper function for read pixel colour. Returns pixel colour as 24-bit value.
+uint24_t vdp_read_pixel_colour( int x, int y );
+
 // VDU 23, 0, &85, channel, command, <args>: Audio commands
 //   see below
+
 // VDU 23, 0, &86: Fetch the screen dimensions
-void vdp_get_scr_dims( bool );
+//     -- not implemented --
+//    "Generally applications should not need to call this, as this information will
+//     be automatically sent to MOS when the screen mode is changed."
+//     The application should read the screen dimension using the getsysvar_scr*() calls
+//     (waiting for vdp_pflag_mode to be set if mode was changed)
+
 // VDU 23, 0, &87: RTC control
 // VDU 23, 0, &88, delay; rate; led: Keyboard Control
 // VDU 23, 0, &89, command, [<args>]: Mouse control
@@ -163,8 +191,6 @@ void vdp_draw_bitmap( int x, int y );
 void vdp_adv_select_bitmap(int bufferId);
 // VDU 23, 27, &21, w; h; format: Create bitmap from selected buffer
 void vdp_adv_bitmap_from_buffer(int width, int height, int format);
-// VDU 23, 27, &21, bitmapId; 0; Capture screen data into bitmap using a 16-bit buffer ID
-// -- not implemented --
 
 // VDU 23, 27, 4, n: Select sprite n
 void vdp_select_sprite( int n );
@@ -195,32 +221,100 @@ void vdp_reset_sprites( void );
 // VDU 23, 27, 17: Reset sprites (only) and clear all data
 // VDU 23, 27, 18, n: Set the current sprite GCOL paint mode to n **
 // VDU 23, 27, &26, n;: Add bitmap n as a frame to current sprite using a 16-bit buffer ID
+void vdp_adv_add_sprite_bitmap( int b );
 
 // Helper function to load bitmaps from file and assign to a sprite
+// see below for 16-bit bufferID version vdp_adv_load_sprite_bitmaps
 int vdp_load_sprite_bitmaps( const char *fname_prefix, const char *fname_format,
 							int width, int height, int num, int bitmap_num );
 // Helper function to assign sequence of bitmaps to a sprite (activates all sprites to n)
+// see below for 16-bit bufferID version vdp_adv_create_sprite
 void vdp_create_sprite( int sprite, int bitmap_num, int frames );
 
 // VDU 23, 27, &40, hotX, hotY: Setup a mouse cursor
 
-
 // ========= Advanced Buffer Commands =========
+// Command 0: Write block to a buffer
+// 	VDU 23, 0 &A0, bufferId; 0, length; <buffer-data>
 void vdp_adv_write_block(int bufferID, int length);
+// Command 1: Call a buffer
+// 	VDU 23, 0 &A0, bufferId; 1
+// Command 2: Clear a buffer
+// 	VDU 23, 0 &A0, bufferId; 2
 void vdp_adv_clear_buffer(int bufferID);
+// Command 3: Create a writeable buffer
+// 	VDU 23, 0 &A0, bufferId; 3, length;
 void vdp_adv_create(int bufferID, int length);
+// Command 4: Set output stream to a buffer
+// 	VDU 23, 0 &A0, bufferId; 4
 void vdp_adv_stream(int bufferID);
+// Command 5: Adjust buffer contents
+// 	VDU 23, 0, &A0, bufferId; 5, operation, offset; [count;] <operand>, [arguments]
 void vdp_adv_adjust(int bufferID, int operation, int offset);
+// Command 6: Conditionally call a buffer
+// 	VDU 23, 0, &A0, bufferId; 6, operation, checkBufferId; checkOffset; [arguments]
+// Command 7: Jump to a buffer
+// 	VDU 23, 0, &A0, bufferId; 7
+// Command 8: Conditional Jump to a buffer
+// 	VDU 23, 0, &A0, bufferId; 8, operation, checkBufferId; checkOffset; [arguments]
+// Command 9: Jump to an offset in a buffer
+// 	VDU 23, 0, &A0, bufferId; 9, offset; offsetHighByte, [blockNumber;]
+// Command 10: Conditional jump to an offset in a buffer
+// 	VDU 23, 0, &A0, bufferId; 10, offset; offsetHighByte, [blockNumber;] [arguments]
+// Command 11: Call buffer with an offset
+// 	VDU 23, 0, &A0, bufferId; 11, offset; offsetHighByte, [blockNumber;]
+// Command 12: Conditional call buffer with an offset
+// 	VDU 23, 0, &A0, bufferId; 12, offset; offsetHighByte, [blockNumber;] [arguments]
+// Command 13: Copy blocks from multiple buffers into a single buffer
+// 	VDU 23, 0, &A0, targetBufferId; 13, sourceBufferId1; sourceBufferId2; ... 65535;
+// Command 14: Consolidate blocks in a buffer
+// 	VDU 23, 0, &A0, bufferId; 14
 void vdp_adv_consolidate(int bufferID);
+// Command 15: Split a buffer into multiple blocks
+// 	VDU 23, 0, &A0, bufferId; 15, blockSize;
+// Command 16: Split a buffer into multiple blocks and spread across multiple buffers
+// 	VDU 23, 0, &A0, bufferId; 16, blockSize; [targetBufferId1;] [targetBufferId2;] ... 65535;
+// Command 17: Split a buffer and spread across blocks, starting at target buffer ID
+// 	VDU 23, 0, &A0, bufferId; 17, blockSize; targetBufferId;
+// Command 18: Split a buffer into blocks by width
+// 	VDU 23, 0, &A0, bufferId; 18, width; blockCount;
+// Command 19: Split by width into blocks and spread across target buffers
+// 	VDU 23, 0, &A0, bufferId; 19, width; [targetBufferId1;] [targetBufferId2;] ... 65535;
+// Command 20: Split by width into blocks and spread across blocks starting at target buffer ID
+// 	VDU 23, 0, &A0, bufferId; 20, width; blockCount; targetBufferId;
+// Command 21: Spread blocks from a buffer across multiple target buffers
+// 	VDU 23, 0, &A0, bufferId; 21, [targetBufferId1;] [targetBufferId2;] ... 65535;
+// Command 22: Spread blocks from a buffer across blocks starting at target buffer ID
+// 	VDU 23, 0, &A0, bufferId; 22, targetBufferId;
+// Command 23: Reverse the order of blocks in a buffer
+// 	VDU 23, 0, &A0, bufferId; 23
+// Command 24: Reverse the order of data of blocks within a buffer
+// 	VDU 23, 0, &A0, bufferId; 24, options, [valueSize;] [chunkSize;]
+// Command 25: Copy blocks from multiple buffers by reference
+// 	VDU 23, 0, &A0, targetBufferId; 25, sourceBufferId1; sourceBufferId2; ...; 65535;
+// Command 26: Copy blocks from multiple buffers and consolidate
+// 	VDU 23, 0, &A0, targetBufferId; 26, sourceBufferId1; sourceBufferId2; ...; 65535;
+// Command 64: Compress a buffer
+// 	VDU 23, 0, &A0, targetBufferId; 64, sourceBufferId;
+// Command 65: Decompress a buffer
+// 	VDU 23, 0, &A0, targetBufferId; 65, sourceBufferId;
 
+// Helper functions using full 16-bit buffer-id
 int vdp_adv_load_sprite_bitmaps( const char *fname_prefix, const char *fname_format, int width, int height, int num, int bitmap_num );
-void vdp_adv_add_sprite_bitmap( int b );
 void vdp_adv_create_sprite( int sprite, int bitmap_num, int frames );
 
 // ========= Audio Commands =========
+// Command 0: Play note 
+// 	VDU 23, 0, &85, channel, 0, volume, frequency; duration;
 void vdp_audio_play_note( int channel, int volume, int frequency, int duration);
+// Command 1: Status 
+// 	VDU 23, 0, &85, channel, 1
 void vdp_audio_status( int channel );
+// Command 2: Set volume
+// 	VDU 23, 0, &85, channel, 2, volume
 void vdp_audio_set_volume( int channel, int volume );
+// Command 3: Set frequency
+//	VDU 23, 0, &85, channel, 3, frequency;
 void vdp_audio_set_frequency( int channel, int frequency );
 #define VDP_AUDIO_WAVEFORM_SQUARE 0
 #define VDP_AUDIO_WAVEFORM_TRIANGLE 1
@@ -228,39 +322,111 @@ void vdp_audio_set_frequency( int channel, int frequency );
 #define VDP_AUDIO_WAVEFORM_SINEWAVE 3
 #define VDP_AUDIO_WAVEFORM_NOISE 4
 #define VDP_AUDIO_WAVEFORM_VICNOISE 5
+// Command 4 (types 0-5): Set waveform
+//	VDU 23, 0, &85, channel, 4, waveformOrSample, [bufferId;]
 void vdp_audio_set_waveform( int channel, int waveform );
+// Command 4 (type 8): Set sample
 void vdp_audio_set_sample( int channel, int bufferID );
+// Command 5: Sample management
+// 	VDU 23, 0, &85, channelOrSample, 5, sampleCommand, [parameters]
+//	Command 5, 0: Load sample
+//		VDU 23, 0, &85, sample, 5, 0, length; lengthHighByte, <sampleData>
+//		the sample data is assumed to be 8-bit signed PCM samples at 16kHz
 void vdp_audio_load_sample( int sample, int length, uint8_t *data);
+// 	Command 5, 1: Clear sample
+//		VDU 23, 0, &85, sample, 5, 1
 void vdp_audio_clear_sample( int sample );
 #define VDP_AUDIO_SAMPLE_FORMAT_8BIT_SIGNED 0
 #define VDP_AUDIO_SAMPLE_FORMAT_8BIT_UNSIGNED 1
 #define VDP_AUDIO_SAMPLE_FORMAT_SAMPLE_RATE_FOLLOWS 8
 #define VDP_AUDIO_SAMPLE_FORMAT_SAMPLE_TUNEABLE 8
+//	Command 5, 2: Create a sample from a buffer
+//		VDU 23, 0, &85, channel, 5, 2, bufferId; format, [sampleRate;]
 void vdp_audio_create_sample_from_buffer( int channel, int bufferID, int format);
+//	Command 5, 3: Set sample base frequency
+//		VDU 23, 0, &85, sample, 5, 3, frequency;
 void vdp_audio_set_sample_frequency( int sample, int frequency );
+//	Command 5, 4: Set sample frequency for a sample by buffer ID
+//		VDU 23, 0, &85, channel, 5, 4, bufferId; frequency;
 void vdp_audio_set_buffer_frequency( int channel, int bufferID, int frequency );
+//	Command 5, 5: Set sample repeat start point
+//		VDU 23, 0, &85, sample, 5, 5, repeatStart; repeatStartHighByte
 void vdp_audio_set_sample_repeat_start( int sample, int repeatStart );
+//	Command 5, 6: Set sample repeat start point by buffer ID
+//		VDU 23, 0, &85, channel, 5, 6, bufferId; repeatStart; repeatStartHighByte
 void vdp_audio_set_buffer_repeat_start( int channel, int bufferID, int repeatStart );
+//	Command 5, 7: Set sample repeat length
+//		VDU 23, 0, &85, sample, 5, 7, repeatLength; repeatLengthHighByte
 void vdp_audio_set_sample_repeat_length( int sample, int repeatLength );
+//	Command 5, 8: Set sample repeat length by buffer ID
+//		VDU 23, 0, &85, channel, 5, 8, bufferId; repeatLength; repeatLengthHighByte
 void vdp_audio_set_buffer_repeat_length( int channel, int bufferID, int repeatLength );
-
+// Command 6: Volume envelope. Type 0: Disable
+//	VDU 23, 0, &85, channel, 6, type, [parameters]
 void vdp_audio_volume_envelope_disable( int channel );
+// Command 6: Volume envelope. Type 1: ADSR
+// 	VDU 23, 0, &85, channel, 6, 1, attack; decay; sustain, release;
 void vdp_audio_volume_envelope_ADSR( int channel, int attack, int decay, int sustain, int release );
+// Command 6: Volume envelope. Type 2: Multi-phase ADSR
+// 	VDU 23, 0, &85, channel, 6, 2, attackCount, [level, duration;]*, sustainCount, [level, duration;]*, releaseCount, [level, duration;]*
+// 	variable length parameters - leave to user to send separately
 void vdp_audio_volume_envelope_multiphase_ADSR( int channel ); // variable length parameters to be send separately
+// Command 7: Frequency envelope
+//	VDU 23, 0, &85, channel, 7, type, [parameters]
+// 	Type 0: None
+//		VDU 23, 0, &85, channel, 7, 0
 void vdp_audio_frequency_envelope_disable( int channel );
+//	Type 1: Stepped frequency envelope
+//		VDU 23, 0, &85, channel, 7, 1, phaseCount, controlByte, stepLength; [phase1Adjustment; phase1NumberOfSteps; phase2Adjustment; phase2NumberOfSteps; ...]
 #define VDP_AUDIO_FREQ_ENVELOPE_CONTROL_REPEATS 1
 #define VDP_AUDIO_FREQ_ENVELOPE_CONTROL_CUMULATIVE 2
 #define VDP_AUDIO_FREQ_ENVELOPE_CONTROL_RESTRICT 4
 void vdp_audio_frequency_envelope_stepped( int channel, int phaseCount, int controlByte, int stepLength );
-
+// Command 8: Enable Channel
+// 	VDU 23, 0, &85, channel, 8
 void vdp_audio_enable_channel( int channel );
+// Command 9: Disable Channel
+//  	VDU 23, 0, &85, channel, 9
 void vdp_audio_disable_channel( int channel );
+// Command 10: Reset Channel
+//  	VDU 23, 0, &85, channel, 10
 void vdp_audio_reset_channel( int channel );
-
+// Command 11: Seek to position
+// 	VDU 23, 0, &85, channel, 11, position; positionHighByte
 void vdp_audio_sample_seek( int channel, int position );
+// Command 12: Set duration
+// 	VDU 23, 0, &85, channel, 12, duration; durationHighByte
 void vdp_audio_sample_duration( int channel, int duration );
+// Command 13: Set sample rate
+// 	VDU 23, 0, &85, channel, 13, sampleRate;
 void vdp_audio_sample_rate( int channel, int rate );
+// Command 14: Set channel waveform parameters
+// 	VDU 23, 0, &85, channel, 14, parameter, value
 void vdp_audio_set_waveform_parameter( int channel, int parameter, int value );
+
+
+// ========= Context Management =========
+// VDU 23, 0, &C8, 0, contextId: Select context stack
+// VDU 23, 0, &C8, 1, contextId: Delete context stack
+// VDU 23, 0, &C8, 2, flags: Reset
+// VDU 23, 0, &C8, 3: Save context
+// VDU 23, 0, &C8, 4: Restore context
+// VDU 23, 0, &C8, 5, contextId: Save and select a copy of a context
+// VDU 23, 0, &C8, 6: Restore all
+// VDU 23, 0, &C8, 7: Clear stack
+
+// ========= Font Management =========
+// VDU 23, 0, &95: Font management
+// VDU 23, 0, &95, 0, bufferId; flags: Select font
+// VDU 23, 0, &95, 1, bufferId; width, height, ascent, flags: Create font from buffer
+// VDU 23, 0, &95, 2, bufferId; field, value;: Set or adjust font property
+// VDU 23, 0, &95, 3, bufferId; [<args>]: Reserved
+// VDU 23, 0, &95, 4, bufferId;: Clear/Delete font
+// VDU 23, 0, &95, 5, bufferId;: Copy system font to buffer
+//
+
+
+
 
 #ifdef __cplusplus
 }

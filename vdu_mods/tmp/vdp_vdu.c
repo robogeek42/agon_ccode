@@ -14,7 +14,6 @@ typedef struct { uint8_t A; } VDU_A;
 typedef struct { uint8_t A; uint8_t n; } VDU_A_n;
 typedef struct { uint8_t A; uint8_t CMD; } VDU_A_CMD;
 typedef struct { uint8_t A; uint8_t CMD; uint8_t n; } VDU_A_CMD_n;
-typedef struct { uint8_t A; uint8_t CMD; uint8_t a; uint8_t b; } VDU_A_CMD_a_b;
 typedef struct { uint8_t A; uint8_t c; uint8_t r; } VDU_A_c_r;
 typedef struct { uint8_t A; uint8_t a; uint8_t b; uint8_t c; uint8_t d; } VDU_A_a_b_c_d;
 typedef struct { uint8_t A; uint8_t l; uint8_t p; uint8_t r; uint8_t g; uint8_t b; } VDU_A_l_p_r_g_b;
@@ -44,9 +43,6 @@ volatile SYSVAR *vdp_vdu_init( void )
 
 // Basic VDU commands
 
-static VDU_A_n vdu_send_to_printer = { 1, 0 };
-static VDU_A vdu_enable_printer = { 2 };
-static VDU_A vdu_disable_printer = { 3 };
 static VDU_A vdu_write_at_text_cursor = { 4 };
 static VDU_A vdu_write_at_graphics_cursor = { 5 };
 static VDU_A vdu_enable_screen = { 6 };
@@ -56,7 +52,6 @@ static VDU_A vdu_cursor_right = { 9 };
 static VDU_A vdu_cursor_down = { 10 };
 static VDU_A vdu_cursor_up = { 11 };
 static VDU_A vdu_clear_screen = { 12 };
-static VDU_A vdu_carriage_return = { 13 };
 static VDU_A vdu_page_mode_on = { 14 };
 static VDU_A vdu_page_mode_off = { 15 };
 static VDU_A vdu_clear_graphics = { 16 };
@@ -71,8 +66,6 @@ static VDU_A vdu_cursor_home = { 30 };
 static VDU_A_c_r vdu_cursor_tab = { 31, 0, 0 };
 static VDU_A_B_CMD vdu_swap = { 23, 0, 195 };
 
-void vdp_enable_printer( void ) { VDP_PUTS( vdu_enable_printer ); }
-void vdp_disable_printer( void ) { VDP_PUTS( vdu_disable_printer ); }
 void vdp_write_at_text_cursor( void ) { VDP_PUTS( vdu_write_at_text_cursor ); }
 void vdp_write_at_graphics_cursor( void ) { VDP_PUTS( vdu_write_at_graphics_cursor ); }
 void vdp_enable_screen( void ) { VDP_PUTS( vdu_enable_screen ); }
@@ -82,7 +75,6 @@ void vdp_cursor_right( void ) { VDP_PUTS( vdu_cursor_right ); }
 void vdp_cursor_down( void ) { VDP_PUTS( vdu_cursor_down ); }
 void vdp_cursor_up( void ) { VDP_PUTS( vdu_cursor_up ); }
 void vdp_clear_screen( void ) { VDP_PUTS( vdu_clear_screen ); }
-void vdp_carriage_return( void ) { VDP_PUTS( vdu_carriage_return ); }
 void vdp_page_mode_on( void ) { VDP_PUTS( vdu_page_mode_on ); }
 void vdp_page_mode_off( void ) { VDP_PUTS( vdu_page_mode_off ); }
 void vdp_clear_graphics( void ) { VDP_PUTS( vdu_clear_graphics ); }
@@ -90,12 +82,6 @@ void vdp_reset_graphics( void ) { VDP_PUTS( vdu_reset_graphics ); }
 void vdp_disable_screen( void ) { VDP_PUTS( vdu_disable_screen ); }
 void vdp_cursor_home( void ) { VDP_PUTS( vdu_cursor_home ); }
 void vdp_swap( void ) { VDP_PUTS( vdu_swap ); }
-
-void vdp_send_to_printer( char ch )
-{
-	vdu_send_to_printer.n = ch;
-	VDP_PUTS( vdu_send_to_printer );
-}
 
 // rg: fixed this so it is X, Y
 void vdp_cursor_tab( int col, int row )
@@ -149,14 +135,10 @@ static VDU_A_B_ui8x8 vdu_redefine_character = { 23, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 static VDU_A_B_CMD vdu_get_scr_dims = { 23, 0, 0x86 };
 static VDU_A_B_CMD_n vdu_set_logical_scr_dims = { 23, 0, 0xC0, 0 }; 
 static VDU_A_CMD_n vdu_cursor_enable = { 23, 1, 0 };
-static VDU_A_B_ui8x8 vdu_set_dotted_line_pattern = { 23, 6, 0, 0, 0, 0, 0, 0, 0, 0 };
-static VDU_A_a_b_c_d vdu_scroll_screen = { 23, 7, 1, 0, 0};
-static VDU_A_CMD_a_b vdu_cursor_behaviour = { 23, 16, 0, 0 };
-static VDU_A_CMD_n vdu_set_line_thickness = { 23, 23, 0 };
+static VDU_A_a_b_c_d vdu_scroll_screen = {23, 7, 1, 0, 0};
 
 void vdp_redefine_character( int chnum, uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3, uint8_t b4, uint8_t b5, uint8_t b6, uint8_t b7 )
 {
-	if ( chnum < 32 || chnum > 255 ) return;
 	vdu_redefine_character.B = chnum;
 	vdu_redefine_character.b0 = b0;
 	vdu_redefine_character.b1 = b1;
@@ -168,30 +150,17 @@ void vdp_redefine_character( int chnum, uint8_t b0, uint8_t b1, uint8_t b2, uint
 	vdu_redefine_character.b7 = b7;
 	VDP_PUTS( vdu_redefine_character );
 }
-void vdp_set_dotted_line_pattern( uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3, uint8_t b4, uint8_t b5, uint8_t b6, uint8_t b7 )
-{
-	vdu_set_dotted_line_pattern.b0 = b0;
-	vdu_set_dotted_line_pattern.b1 = b1;
-	vdu_set_dotted_line_pattern.b2 = b2;
-	vdu_set_dotted_line_pattern.b3 = b3;
-	vdu_set_dotted_line_pattern.b4 = b4;
-	vdu_set_dotted_line_pattern.b5 = b5;
-	vdu_set_dotted_line_pattern.b6 = b6;
-	vdu_set_dotted_line_pattern.b7 = b7;
-	VDP_PUTS( vdu_set_dotted_line_pattern );
-}
 
-void vdp_cursor_behaviour( int setting, int mask )
+void vdp_get_scr_dims( bool wait )
 {
-	vdu_cursor_behaviour.a = setting;
-	vdu_cursor_behaviour.b = mask;
-	VDP_PUTS( vdu_cursor_behaviour );
-}
+	if ( !sys_vars ) vdp_vdu_init();
 
-void vdp_set_line_thickness( int pixels )
-{
-	vdu_set_line_thickness.CMD = pixels;
-	VDP_PUTS( vdu_set_line_thickness );
+	if ( wait ) sys_vars->vpd_pflags = 0;
+
+	VDP_PUTS( vdu_get_scr_dims );
+
+	// wait for results of mode change to be reflected in SYSVARs
+	if ( wait ) while ( !(sys_vars->vpd_pflags & vdp_pflag_mode) );
 }
 
 void vdp_logical_scr_dims( bool flag )
@@ -228,7 +197,6 @@ void vdp_scroll_screen( int direction, int speed )
 
 static VDU_A vdu_reset_viewports = { 26 };
 static VDU_A_ui16x4 vdu_set_graphics_viewport = { 24, 0, 0, 0, 0 };
-static VDU_A_n vdu_send_to_screen = { 27, 0 };
 static VDU_A_a_b_c_d vdu_set_text_viewport = { 28, 0, 0, 0, 0 };
 
 void vdp_reset_viewports( void ) { VDP_PUTS( vdu_reset_viewports ); }
@@ -247,100 +215,6 @@ void vdp_set_text_viewport( int left, int bottom, int right, int top )
 	vdu_set_text_viewport.c = right;
 	vdu_set_text_viewport.d = top;
 	VDP_PUTS( vdu_set_text_viewport );
-}
-void vdp_send_to_screen( char ch )
-{
-	vdu_send_to_screen.n = ch;
-	VDP_PUTS( vdu_send_to_screen );
-}
-
-static VDU_A_B_CMD_n vdu_set_cursor_start_line = { 23, 0, 0x0A, 0 }; 
-static VDU_A_B_CMD_n vdu_set_cursor_end_line = { 23, 0, 0x0B, 0 }; 
-static VDU_A_B_CMD_n vdu_set_keyboard_locale = { 23, 0, 0x81, 0 }; 
-static VDU_A_B_CMD vdu_get_text_cursor_position = { 23, 0, 0x82 }; 
-static VDU_A_B_CMD_x_y vdu_get_ascii_code_at_position = { 23, 0, 0x83, 0, 0 }; 
-static VDU_A_B_CMD_x_y vdu_get_pixel_colour = { 23, 0, 0x84, 0, 0 }; 
-
-void vdp_set_cursor_start_line( int n )
-{
-	vdu_set_cursor_start_line.n = n;
-	VDP_PUTS( vdu_set_cursor_start_line );
-}
-void vdp_set_cursor_end_line( int n )
-{
-	vdu_set_cursor_end_line.n = n;
-	VDP_PUTS( vdu_set_cursor_end_line );
-}
-void vdp_set_keyboard_locale( int locale )
-{
-	vdu_set_keyboard_locale.n = locale;
-	VDP_PUTS( vdu_set_keyboard_locale );
-}
-void vdp_get_text_cursor_position( bool wait )
-{
-	if ( !sys_vars ) vdp_vdu_init();
-	if ( wait ) sys_vars->vpd_pflags = 0;
-
-	VDP_PUTS( vdu_get_text_cursor_position );
-	// wait for results to be reflected in SYSVARs
-	if ( wait ) while ( !(sys_vars->vpd_pflags & vdp_pflag_cursor) );
-}
-void vdp_read_text_cursor_position( uint8_t *return_x, uint8_t *return_y )
-{
-	if ( !sys_vars ) vdp_vdu_init();
-	sys_vars->vpd_pflags = 0;
-
-	VDP_PUTS( vdu_get_text_cursor_position );
-	while ( !(sys_vars->vpd_pflags & vdp_pflag_cursor) );
-
-	if ( return_x) *return_x = getsysvar_cursorX();
-	if ( return_y) *return_y = getsysvar_cursorY();
-}
-
-void vdp_get_ascii_code_at_position( bool wait )
-{
-	if ( !sys_vars ) vdp_vdu_init();
-	if ( wait ) sys_vars->vpd_pflags = 0;
-
-	VDP_PUTS( vdu_get_ascii_code_at_position );
-	if ( wait ) while ( !(sys_vars->vpd_pflags & vdp_pflag_scrchar) );
-}
-uint8_t vdp_read_ascii_code_at_position( int x, int y )
-{
-	uint8_t code = 0;
-
-	if ( !sys_vars ) vdp_vdu_init();
-	sys_vars->vpd_pflags = 0;
-
-	vdu_get_ascii_code_at_position.x = x;
-	vdu_get_ascii_code_at_position.y = y;
-	VDP_PUTS( vdu_get_ascii_code_at_position );
-	while ( !(sys_vars->vpd_pflags & vdp_pflag_scrchar) );
-
-	code = getsysvar_scrchar();
-	return code;
-}
-
-void vdp_get_pixel_colour( int x, int y )
-{
-	vdu_get_pixel_colour.x = x;
-	vdu_get_pixel_colour.y = y;
-	VDP_PUTS( vdu_get_pixel_colour );
-}
-uint24_t vdp_read_pixel_colour( int x, int y )
-{
-	uint24_t pixel = 0;
-
-	if ( !sys_vars ) vdp_vdu_init();
-	sys_vars->vpd_pflags = 0;
-
-	vdu_get_pixel_colour.x = x;
-	vdu_get_pixel_colour.y = y;
-	VDP_PUTS( vdu_get_pixel_colour );
-	while ( !(sys_vars->vpd_pflags & vdp_pflag_point) );
-
-	pixel = getsysvar_scrpixel();
-	return pixel;
 }
 
 // VDU 25 - plot command
@@ -545,7 +419,6 @@ void vdp_create_sprite( int sprite, int bitmap_num, int frames )
 		VDP_PUTS( vdu_sprite_add_bitmap );
 	}
 	vdu_sprite_activate.n = sprite;
-	VDP_PUTS( vdu_sprite_activate );
 }
 
 void vdp_select_sprite( int n )
@@ -736,7 +609,6 @@ void vdp_adv_create_sprite( int sprite, int bitmap_num, int frames )
 		vdp_adv_add_sprite_bitmap( bitmap_num++ );
 	}
 	vdu_sprite_activate.n = sprite;
-	VDP_PUTS( vdu_sprite_activate );
 }
 
 // Audio API
@@ -785,53 +657,29 @@ void vdp_adv_create_sprite( int sprite, int bitmap_num, int frames )
 //  	VDU 23, 0, &85, channel, 9
 // Command 10: Reset Channel
 //  	VDU 23, 0, &85, channel, 10
-// Command 11: Seek to position
-// 	VDU 23, 0, &85, channel, 11, position; positionHighByte
-// Command 12: Set duration
-// 	VDU 23, 0, &85, channel, 12, duration; durationHighByte
-// Command 13: Set sample rate
-// 	VDU 23, 0, &85, channel, 13, sampleRate;
-// Command 14: Set channel waveform parameters
-// 	VDU 23, 0, &85, channel, 14, parameter, value
 //
 
 typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t channel; uint8_t CMD; } VDU_AUDIO_CMD;
 typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t channel; uint8_t CMD; uint8_t b1; } VDU_AUDIO_CMD_B;
 typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t channel; uint8_t CMD; uint16_t w1; } VDU_AUDIO_CMD_W;
-typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t channel; uint8_t CMD; uint8_t b1; uint16_t w2; } VDU_AUDIO_CMD_B_W;
-typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t channel; uint8_t CMD; uint8_t b1; uint16_t w2; uint8_t b3; } VDU_AUDIO_CMD_B_W_B;
-typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t channel; uint8_t CMD; uint8_t b1; uint16_t w2; uint16_t w3; } VDU_AUDIO_CMD_B_W_W;
-typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t channel; uint8_t CMD; uint8_t b1; uint16_t w2; uint16_t w3; uint8_t b4; uint16_t w5; } VDU_AUDIO_CMD_B_W_W_B_W;
-typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t sample; uint8_t CMD; uint8_t TYPE; uint24_t length; } VDU_AUDIO_LOAD_SAMPLE;
-typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t sample; uint8_t CMD; uint8_t b1; uint24_t ww2; } VDU_AUDIO_CMD_B_WW;
-typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t sample; uint8_t CMD; uint8_t b1; uint16_t w2; uint24_t ww3; } VDU_AUDIO_CMD_B_W_WW;
-typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t channel; uint8_t CMD; uint8_t b1; uint8_t b2; uint8_t b3; uint16_t w4; } VDU_AUDIO_CMD_B_B_B_W;
-typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t channel; uint8_t CMD; uint24_t ww1; } VDU_AUDIO_CMD_WW;
-typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t channel; uint8_t CMD; uint8_t b1; uint8_t b2; } VDU_AUDIO_CMD_B_B;
+typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t channel; uint8_t CMD; uint8_t b1; uint16_t w1; } VDU_AUDIO_CMD_B_W;
+typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t channel; uint8_t CMD; uint8_t b1; uint16_t w1; uint16_t w1; } VDU_AUDIO_CMD_B_W_W;
 
 static VDU_AUDIO_CMD vdu_audio = { 23, 0, 0x85, 0, 0 };
 static VDU_AUDIO_CMD_B vdu_audio_b = { 23, 0, 0x85, 0, 0, 0 };
 static VDU_AUDIO_CMD_W vdu_audio_w = { 23, 0, 0x85, 0, 0, 0 };
 static VDU_AUDIO_CMD_B_W vdu_audio_b_w = { 23, 0, 0x85, 0, 0, 0, 0 };
-static VDU_AUDIO_CMD_B_W_B vdu_audio_b_w_b = { 23, 0, 0x85, 0, 0, 0, 0, 0 };
 static VDU_AUDIO_CMD_B_W_W vdu_audio_b_w_w = { 23, 0, 0x85, 0, 0, 0, 0, 0 };
-static VDU_AUDIO_CMD_B_W_W_B_W vdu_audio_b_w_w_b_w = { 23, 0, 0x85, 0, 0, 0, 0, 0, 0, 0 };
-static VDU_AUDIO_LOAD_SAMPLE vdu_audio_load_sample = { 23, 0, 0x85, 0, 5, 0, 0 };
-static VDU_AUDIO_CMD_B_WW vdu_audio_b_ww = { 23, 0, 0x85, 0, 0, 0, 0 };
-static VDU_AUDIO_CMD_B_W_WW vdu_audio_b_w_ww = { 23, 0, 0x85, 0, 0, 0, 0, 0 };
-static VDU_AUDIO_CMD_B_B_B_W vdu_audio_b_b_b_w = { 23, 0, 0x85, 0, 7, 1, 0, 0, 0 };
-static VDU_AUDIO_CMD_WW vdu_audio_ww = { 23, 0, 0x85, 0, 0, 0 };
-static VDU_AUDIO_CMD_B_B vdu_audio_b_b = { 23, 0, 0x85, 0, 0, 0, 0 };
 
 // Command 0: Play note 
 // 	VDU 23, 0, &85, channel, 0, volume, frequency; duration;
-void vdp_audio_play_note( int channel, int volume, int frequency, int duration)
+void vdp_play_note( int channel, int volume, int frequency, inr duration)
 {
 	vdu_audio_b_w_w.channel = channel;
 	vdu_audio_b_w_w.CMD = 0;
 	vdu_audio_b_w_w.b1 = volume;
-	vdu_audio_b_w_w.w2 = frequency;
-	vdu_audio_b_w_w.w3 = duration;
+	vdu_audio_b_w_w.w1 = frequency;
+	vdu_audio_b_w_w.w2 = duration;
        	VDP_PUTS( vdu_audio_b_w_w ); 
 }
 
@@ -864,195 +712,26 @@ void vdp_audio_set_frequency( int channel, int frequency )
        	VDP_PUTS( vdu_audio_w ); 
 }
 
-// Command 4 (types 0-5): Set waveform
+// Command 4: Set waveform
 //	VDU 23, 0, &85, channel, 4, waveformOrSample, [bufferId;]
 void vdp_audio_set_waveform( int channel, int waveform )
 {
-	// only for waveforms 0-5, use vdp_audio_set_sample for 8,-1
+	// only for waveforms 0-7, use vdp_audio_set_sample otherwise
 	vdu_audio_b.channel = channel;
 	vdu_audio_b.CMD = 4;
 	vdu_audio_b.b1 = waveform;
        	VDP_PUTS( vdu_audio_b ); 
 }
-// Command 4 (type 8): Set sample
 void vdp_audio_set_sample( int channel, int bufferID )
 {
-	// only for waveforms 8,-1, use vdp_audio_set_waveform otherwise
+	// only for waveforms 0-7, use vdp_audio_set_sample otherwise
 	vdu_audio_b_w.channel = channel;
 	vdu_audio_b_w.CMD = 4;
 	vdu_audio_b_w.b1 = 8; // waveform=8 is sample
-	vdu_audio_b_w.w2 = bufferID;
+	vdu_audio_b_w.w1 = bufferID;
        	VDP_PUTS( vdu_audio_b_w ); 
 }
 
-// Command 5: Sample management
-// 	VDU 23, 0, &85, channelOrSample, 5, sampleCommand, [parameters]
-//	Command 5, 0: Load sample
-//		VDU 23, 0, &85, sample, 5, 0, length; lengthHighByte, <sampleData>
-//		the sample data is assumed to be 8-bit signed PCM samples at 16kHz
-void vdp_audio_load_sample( int sample, int length, uint8_t *data)
-{
-	vdu_audio_load_sample.sample = sample;
-	vdu_audio_load_sample.length = length;
-	VDP_PUTS( vdu_audio_load_sample );
-
-	int size;
-	char *ptr = (char *)data;
-	for ( size = length; size > LOAD_BMAP_BLOCK; size -= LOAD_BMAP_BLOCK ) {
-		mos_puts( (char *)ptr, LOAD_BMAP_BLOCK, 0 );
-		ptr += LOAD_BMAP_BLOCK;
-	}
-	mos_puts( (char *)ptr, size, 0 );
-}
-
-// 	Command 5, 1: Clear sample
-//		VDU 23, 0, &85, sample, 5, 1
-void vdp_audio_clear_sample( int sample )
-{
-	vdu_audio_b.channel = sample;
-	vdu_audio_b.CMD = 5;
-	vdu_audio_b.b1 = 1;
-       	VDP_PUTS( vdu_audio_b ); 
-}
-
-//	Command 5, 2: Create a sample from a buffer
-//		VDU 23, 0, &85, channel, 5, 2, bufferId; format, [sampleRate;]
-void vdp_audio_create_sample_from_buffer( int channel, int bufferID, int format)
-{
-	vdu_audio_b_w_b.channel = channel;
-	vdu_audio_b_w_b.CMD = 5;
-	vdu_audio_b_w_b.b1 = 2;
-	vdu_audio_b_w_b.w2 = bufferID;
-	vdu_audio_b_w_b.b3 = format;
-	VDP_PUTS( vdu_audio_b_w_b );
-}
-
-//	Command 5, 3: Set sample base frequency
-//		VDU 23, 0, &85, sample, 5, 3, frequency;
-void vdp_audio_set_sample_frequency( int sample, int frequency )
-{
-	vdu_audio_b_w.channel = sample;
-	vdu_audio_b_w.CMD = 5;
-	vdu_audio_b_w.b1 = 3;
-	vdu_audio_b_w.w2 = frequency;
-	VDP_PUTS( vdu_audio_b_w );
-}
-
-//	Command 5, 4: Set sample frequency for a sample by buffer ID
-//		VDU 23, 0, &85, channel, 5, 4, bufferId; frequency;
-void vdp_audio_set_buffer_frequency( int channel, int bufferID, int frequency )
-{
-	vdu_audio_b_w_w.channel = channel;
-	vdu_audio_b_w_w.CMD = 5;
-	vdu_audio_b_w_w.b1 = 4;
-	vdu_audio_b_w_w.w2 = bufferID;
-	vdu_audio_b_w_w.w3 = frequency;
-	VDP_PUTS( vdu_audio_b_w_w );
-}
-
-//	Command 5, 5: Set sample repeat start point
-//		VDU 23, 0, &85, sample, 5, 5, repeatStart; repeatStartHighByte
-void vdp_audio_set_sample_repeat_start( int sample, int repeatStart )
-{
-	vdu_audio_b_ww.sample = sample;
-	vdu_audio_b_ww.CMD = 5;
-	vdu_audio_b_ww.b1 = 5;
-	vdu_audio_b_ww.ww2 = repeatStart;
-	VDP_PUTS( vdu_audio_b_ww );
-}
-
-//	Command 5, 6: Set sample repeat start point by buffer ID
-//		VDU 23, 0, &85, channel, 5, 6, bufferId; repeatStart; repeatStartHighByte
-void vdp_audio_set_buffer_repeat_start( int channel, int bufferID, int repeatStart )
-{
-	vdu_audio_b_w_ww.sample = channel;
-	vdu_audio_b_w_ww.CMD = 5;
-	vdu_audio_b_w_ww.b1 = 6;
-	vdu_audio_b_w_ww.w2 = bufferID;
-	vdu_audio_b_w_ww.ww3 = repeatStart;
-	VDP_PUTS( vdu_audio_b_w_ww );
-}
-
-//	Command 5, 7: Set sample repeat length
-//		VDU 23, 0, &85, sample, 5, 7, repeatLength; repeatLengthHighByte
-void vdp_audio_set_sample_repeat_length( int sample, int repeatLength )
-{
-	vdu_audio_b_ww.sample = sample;
-	vdu_audio_b_ww.CMD = 5;
-	vdu_audio_b_ww.b1 = 7;
-	vdu_audio_b_ww.ww2 = repeatLength;
-	VDP_PUTS( vdu_audio_b_ww );
-}
-
-//	Command 5, 8: Set sample repeat length by buffer ID
-//		VDU 23, 0, &85, channel, 5, 8, bufferId; repeatLength; repeatLengthHighByte
-void vdp_audio_set_buffer_repeat_length( int channel, int bufferID, int repeatLength )
-{
-	vdu_audio_b_w_ww.sample = channel;
-	vdu_audio_b_w_ww.CMD = 5;
-	vdu_audio_b_w_ww.b1 = 8;
-	vdu_audio_b_w_ww.w2 = bufferID;
-	vdu_audio_b_w_ww.ww3 = repeatLength;
-	VDP_PUTS( vdu_audio_b_w_ww );
-}
-
-// Command 6: Volume envelope. Type 0: Disable
-//	VDU 23, 0, &85, channel, 6, type, [parameters]
-void vdp_audio_volume_envelope_disable( int channel )
-{
-	vdu_audio_b.channel = channel;
-	vdu_audio_b.CMD = 6;
-	vdu_audio_b.b1 = 0;
-       	VDP_PUTS( vdu_audio_b ); 
-}
-// Command 6: Volume envelope. Type 1: ADSR
-// 	VDU 23, 0, &85, channel, 6, 1, attack; decay; sustain, release;
-void vdp_audio_volume_envelope_ADSR( int channel, int attack, int decay, int sustain, int release )
-{
-	vdu_audio_b_w_w_b_w.channel = channel;
-	vdu_audio_b_w_w_b_w.CMD = 6;
-	vdu_audio_b_w_w_b_w.b1 = 1;
-	vdu_audio_b_w_w_b_w.w2 = attack;
-	vdu_audio_b_w_w_b_w.w3 = decay;
-	vdu_audio_b_w_w_b_w.b4 = sustain;
-	vdu_audio_b_w_w_b_w.w5 = release;
-	VDP_PUTS( vdu_audio_b_w_w_b_w );
-}
-// Command 6: Volume envelope. Type 2: Multi-phase ADSR
-// 	VDU 23, 0, &85, channel, 6, 2, attackCount, [level, duration;]*, sustainCount, [level, duration;]*, releaseCount, [level, duration;]*
-// 	variable length parameters - leave to user to send separately
-void vdp_audio_volume_envelope_multiphase_ADSR( int channel )
-{
-	vdu_audio_b.channel = channel;
-	vdu_audio_b.CMD = 6;
-	vdu_audio_b.b1 = 2;
-       	VDP_PUTS( vdu_audio_b ); 
-}
-
-// Command 7: Frequency envelope
-//	VDU 23, 0, &85, channel, 7, type, [parameters]
-// 	Type 0: None
-//		VDU 23, 0, &85, channel, 7, 0
-void vdp_audio_frequency_envelope_disable( int channel )
-{
-	vdu_audio_b.channel = channel;
-	vdu_audio_b.CMD = 7;
-	vdu_audio_b.b1 = 0;
-       	VDP_PUTS( vdu_audio_b ); 
-}
-
-//	Type 1: Stepped frequency envelope
-//		VDU 23, 0, &85, channel, 7, 1, phaseCount, controlByte, stepLength; [phase1Adjustment; phase1NumberOfSteps; phase2Adjustment; phase2NumberOfSteps; ...]
-void vdp_audio_frequency_envelope_stepped( int channel, int phaseCount, int controlByte, int stepLength )
-{
-	vdu_audio_b_b_b_w.channel = channel;
-	vdu_audio_b_b_b_w.CMD = 7;
-	vdu_audio_b_b_b_w.b1 = 1;
-	vdu_audio_b_b_b_w.b2 = phaseCount;
-	vdu_audio_b_b_b_w.b3 = controlByte;
-	vdu_audio_b_b_b_w.w4 = stepLength;
-       	VDP_PUTS( vdu_audio_b_b_b_w ); 
-}
 
 // Command 8: Enable Channel
 // 	VDU 23, 0, &85, channel, 8
@@ -1079,55 +758,4 @@ void vdp_audio_reset_channel( int channel )
        	VDP_PUTS( vdu_audio ); 
 }
 
-// Command 11: Seek to position
-// 	VDU 23, 0, &85, channel, 11, position; positionHighByte
-void vdp_audio_sample_seek( int channel, int position )
-{
-	vdu_audio_ww.channel = channel;
-	vdu_audio_ww.CMD = 11;
-	vdu_audio_ww.ww1 = position;
-       	VDP_PUTS( vdu_audio_ww ); 
-}
 
-// Command 12: Set duration
-// 	VDU 23, 0, &85, channel, 12, duration; durationHighByte
-void vdp_audio_sample_duration( int channel, int duration )
-{
-	vdu_audio_ww.channel = channel;
-	vdu_audio_ww.CMD = 12;
-	vdu_audio_ww.ww1 = duration;
-       	VDP_PUTS( vdu_audio_ww ); 
-}
-
-// Command 13: Set sample rate
-// 	VDU 23, 0, &85, channel, 13, sampleRate;
-void vdp_audio_sample_rate( int channel, int rate )
-{
-	vdu_audio_w.channel = channel;
-	vdu_audio_w.CMD = 13;
-	vdu_audio_w.w1 = rate;
-       	VDP_PUTS( vdu_audio_w ); 
-}
-
-// Command 14: Set channel waveform parameters
-// 	VDU 23, 0, &85, channel, 14, parameter, value
-void vdp_audio_set_waveform_parameter( int channel, int parameter, int value )
-{
-	if ( parameter & 0x80 )
-	{
-		// send 16-bit value
-		vdu_audio_b_w.channel = channel;
-		vdu_audio_b_w.CMD = 14;
-		vdu_audio_b_w.b1 = parameter;
-		vdu_audio_b_w.w2 = value;
-		VDP_PUTS( vdu_audio_b_w ); 
-
-	} else {
-		// send 8-bit value
-		vdu_audio_b_b.channel = channel;
-		vdu_audio_b_b.CMD = 14;
-		vdu_audio_b_b.b1 = parameter;
-		vdu_audio_b_b.b2 = value;
-		VDP_PUTS( vdu_audio_b_b ); 
-	}
-}
