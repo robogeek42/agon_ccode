@@ -62,9 +62,9 @@ void vdp_disable_screen( void );
 int vdp_mode( int mode );
 
 // VDU 23, n: Re-program display character
-void vdp_redefine_character( int chnum, uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3, uint8_t b4, uint8_t b5, uint8_t b6, uint8_t b7 );
+void vdp_redefine_character( int char_num, uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3, uint8_t b4, uint8_t b5, uint8_t b6, uint8_t b7 );
 // VDU 23, 0, <command>, [<arguments>]: System commands
-//   see below
+// -- see below --
 // VDU 23, 1, n: Cursor control
 void vdp_cursor_enable( bool flag );
 // VDU 23, 6, n1, n2, n3, n4, n5, n6, n7, n8: Set dotted line pattern
@@ -77,7 +77,7 @@ void vdp_cursor_behaviour( int setting, int mask );
 // VDU 23, 23, n: Set line thickness
 void vdp_set_line_thickness( int pixels );
 // VDU 23, 27, <command>, [<arguments>]: Bitmap and sprite commands
-// see below
+// -- see below --
 
 // VDU 24, left; bottom; right; top;: Set graphics viewport
 void vdp_set_graphics_viewport( int left, int bottom, int right, int top );
@@ -106,7 +106,6 @@ void vdp_cursor_tab( int row, int col );
 
 // ========= System Commands ==========
 // VDU 23, 0, <command>, [<arguments>]: System commands
-// Many of these are not yet implemented here
 
 // VDU 23, 0, &0A, n: Set cursor start line and appearance
 void vdp_set_cursor_start_line( int n );
@@ -120,24 +119,24 @@ void vdp_set_keyboard_locale( int locale );
 // VDU 23, 0, &82: Request text cursor position
 //   Helper function to request cursor position and wait for results if asked
 //   Results are in sys_vars
-void vdp_get_text_cursor_position( bool wait );
+void vdp_request_text_cursor_position( bool wait );
 //   Helper function to read and return cursor X,Y position.
-void vdp_read_text_cursor_position( uint8_t* return_x, uint8_t* return_y );
+void vdp_return_text_cursor_position( uint8_t* return_x, uint8_t* return_y );
 
 // VDU 23, 0, &83, x; y;: Get ASCII code of character at character position x, y
 //   Helper function to request the character at x, y and wait if asked.
 //   Results are in sys_vars
-void vdp_get_ascii_code_at_position( bool wait );
+void vdp_request_ascii_code_at_position( int x, int y, bool wait );
 //   Helper function to return the character at x, y
-uint8_t vdp_read_ascii_code_at_position( int x, int y );
+uint8_t vdp_return_ascii_code_at_position( int x, int y );
 
 // VDU 23, 0, &84, x; y;: Get colour of pixel at pixel position x, y
-void vdp_get_pixel_colour( int x, int y );
+void vdp_request_pixel_colour( int x, int y, bool wait );
 //   Helper function for read pixel colour. Returns pixel colour as 24-bit value.
-uint24_t vdp_read_pixel_colour( int x, int y );
+uint24_t vdp_return_pixel_colour( int x, int y );
 
 // VDU 23, 0, &85, channel, command, <args>: Audio commands
-//   see below
+// -- see below --
 
 // VDU 23, 0, &86: Fetch the screen dimensions
 //     -- not implemented --
@@ -147,32 +146,61 @@ uint24_t vdp_read_pixel_colour( int x, int y );
 //     (waiting for vdp_pflag_mode to be set if mode was changed)
 
 // VDU 23, 0, &87: RTC control
+//     VDU 23, 0, &87, 0: Read the RTC 
+void vdp_request_rtc( bool wait );
+//     VDU 23, 0, &87, 1, y, m, d, h, m, s: Set the RTC
 // VDU 23, 0, &88, delay; rate; led: Keyboard Control
+void vdp_keyboard_cotrol( int delay, int rate, int led );
 // VDU 23, 0, &89, command, [<args>]: Mouse control
+// -- see below --
 // VDU 23, 0, &8A, n: Set the cursor start column
+void vdp_set_cursor_start_column( int n );
 // VDU 23, 0, &8B, n: Set the cursor end column
+void vdp_set_cursor_end_column( int n );
 // VDU 23, 0, &8C, x; y;: Relative cursor movement (by pixels)
+void vdp_move_cursor_relative( int x, int y );
 // VDU 23, 0, &90, n, b1, b2, b3, b4, b5, b6, b7, b8: Redefine character n (0-255)
+void vdp_redefine_character_special( int char_num, uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3, uint8_t b4, uint8_t b5, uint8_t b6, uint8_t b7 );
+void vdp_define_character( int char_num, uint8_t *data ); // uses VDP2.3.0 redefine special char 23,0,0x90
 // VDU 23, 0, &91: Reset all system font characters to original definition
+void vdp_reset_system_font( void );
 // VDU 23, 0, &93, x; y;: Get ASCII code of character at graphics position x, y
+void vdp_request_ascii_code_at_graphics_position( int x, int y, bool wait );
+// 
+uint8_t vdp_return_ascii_code_at_graphics_position( int x, int y );
 // VDU 23, 0, &94, n: Read colour palette entry n (returns a pixel colour data packet)
+void vdp_request_palette_entry( int n, bool wait );
+uint8_t vdp_read_palette_entry( int n );
 // VDU 23, 0, &95, <command>, [<args>]: Font management commands
+// -- see below --
 // VDU 23, 0, &98, n: Turn control keys on and off
+void vdp_control_keys( bool on );
 // VDU 23, 0, &9C: Set the text viewport using graphics coordinates
+void vdp_set_text_viewport_via_plot( void );
 // VDU 23, 0, &9D: Set the graphics viewport using graphics coordinates
+void vdp_set_graphics_viewport_via_plot( void );
 // VDU 23, 0, &9E: Set the graphics origin using graphics coordinates
+void vdp_set_graphics_origin_via_plot( void );
 // VDU 23, 0, &9F: Move the graphics origin and viewports
+void vdp_move_graphics_origin_and_viewport( void );
 // VDU 23, 0, &A0, <bufferId>, <command>, [<args>]
-//   see below
+// -- see below --
 // VDU 23, 0, &C0, n: Turn logical screen scaling on and off
 void vdp_logical_scr_dims( bool flag );
 // VDU 23, 0, &C1, n: Switch legacy modes on or off
+void vdp_legacy_modes( bool on );
 // VDU 23, 0, &C3: Swap the screen buffer and/or wait for VSYNC
 void vdp_swap( void );
 // VDU 23, 0, &C8, <command>, [<args>]: Context management API 
+// -- see below --
 // VDU 23, 0, &CA: Flush current drawing commands
-// VDU 23, 0, &F2, n: Set dot-dash pattern length §
-
+void vdp_flush_drawing_commands( void );
+// VDU 23, 0, &F2, n: Set dot-dash pattern length
+void vdp_set_dash_pattern_length( int n );
+// VDU 23, 0, &FE, n: Console mode
+void vdp_console_mode( bool on );
+// VDU 23, 0, &FF: Switch to or resume "terminal mode"
+void vdp_terminal_mode( void );
 
 // ========= Bitmaps and Sprites ==========
 // VDU 23, 27, 0, n: Select bitmap n
@@ -219,9 +247,11 @@ void vdp_refresh_sprites( void );
 // VDU 23, 27, 16: Reset bitmaps and sprites and clear all data
 void vdp_reset_sprites( void );
 // VDU 23, 27, 17: Reset sprites (only) and clear all data
+void vdp_reset_sprites_only( void );
 // VDU 23, 27, 18, n: Set the current sprite GCOL paint mode to n **
+void vdp_set_sprite_paint_mode( int n );
 // VDU 23, 27, &26, n;: Add bitmap n as a frame to current sprite using a 16-bit buffer ID
-void vdp_adv_add_sprite_bitmap( int b );
+void vdp_adv_add_sprite_bitmap( int bitmap_num );
 
 // Helper function to load bitmaps from file and assign to a sprite
 // see below for 16-bit bufferID version vdp_adv_load_sprite_bitmaps
@@ -237,8 +267,10 @@ void vdp_create_sprite( int sprite, int bitmap_num, int frames );
 // Command 0: Write block to a buffer
 // 	VDU 23, 0 &A0, bufferId; 0, length; <buffer-data>
 void vdp_adv_write_block(int bufferID, int length);
+void vdp_adv_write_block_data(int bufferID, int length, char *data);
 // Command 1: Call a buffer
 // 	VDU 23, 0 &A0, bufferId; 1
+void vdp_adv_call_buffer(int bufferID);
 // Command 2: Clear a buffer
 // 	VDU 23, 0 &A0, bufferId; 2
 void vdp_adv_clear_buffer(int bufferID);
@@ -250,54 +282,80 @@ void vdp_adv_create(int bufferID, int length);
 void vdp_adv_stream(int bufferID);
 // Command 5: Adjust buffer contents
 // 	VDU 23, 0, &A0, bufferId; 5, operation, offset; [count;] <operand>, [arguments]
-void vdp_adv_adjust(int bufferID, int operation, int offset);
+void vdp_adv_adjust(int bufferID, int operation, int offset );
 // Command 6: Conditionally call a buffer
 // 	VDU 23, 0, &A0, bufferId; 6, operation, checkBufferId; checkOffset; [arguments]
+void vdp_adv_call_conditional(int bufferId, int operation, int checkBufferId, int checkOffset );
 // Command 7: Jump to a buffer
 // 	VDU 23, 0, &A0, bufferId; 7
+void vdp_adv_jump_buffer(int bufferID);
 // Command 8: Conditional Jump to a buffer
 // 	VDU 23, 0, &A0, bufferId; 8, operation, checkBufferId; checkOffset; [arguments]
+void vdp_adv_call_conditional(int bufferId, int operation, int checkBufferId, int checkOffset );
 // Command 9: Jump to an offset in a buffer
 // 	VDU 23, 0, &A0, bufferId; 9, offset; offsetHighByte, [blockNumber;]
+void vdp_adv_jump_offset( int bufferId, int offset );
+void vdp_adv_jump_offset_block( int bufferId, int offset, int block );
 // Command 10: Conditional jump to an offset in a buffer
 // 	VDU 23, 0, &A0, bufferId; 10, offset; offsetHighByte, [blockNumber;] [arguments]
+void vdp_adv_jump_offset_conditional( int bufferId, int offset );
+void vdp_adv_jump_offset_block_conditional( int bufferId, int offset, int block );
 // Command 11: Call buffer with an offset
 // 	VDU 23, 0, &A0, bufferId; 11, offset; offsetHighByte, [blockNumber;]
+void vdp_adv_call_offset( int bufferId, int offset );
+void vdp_adv_call_offset_block( int bufferId, int offset, int block );
 // Command 12: Conditional call buffer with an offset
 // 	VDU 23, 0, &A0, bufferId; 12, offset; offsetHighByte, [blockNumber;] [arguments]
+void vdp_adv_call_offset_conditional( int bufferId, int offset );
+void vdp_adv_call_offset_block_conditional( int bufferId, int offset, int block );
 // Command 13: Copy blocks from multiple buffers into a single buffer
 // 	VDU 23, 0, &A0, targetBufferId; 13, sourceBufferId1; sourceBufferId2; ... 65535;
+void vdp_adv_copy_multiple( int bufferId, int num_buffers, ... );
 // Command 14: Consolidate blocks in a buffer
 // 	VDU 23, 0, &A0, bufferId; 14
 void vdp_adv_consolidate(int bufferID);
 // Command 15: Split a buffer into multiple blocks
 // 	VDU 23, 0, &A0, bufferId; 15, blockSize;
+void vdp_adv_split( int bufferID, int blockSize );
 // Command 16: Split a buffer into multiple blocks and spread across multiple buffers
 // 	VDU 23, 0, &A0, bufferId; 16, blockSize; [targetBufferId1;] [targetBufferId2;] ... 65535;
+void vdp_adv_split_multiple( int bufferId, int blockSize,  int num_buffers, ... );
 // Command 17: Split a buffer and spread across blocks, starting at target buffer ID
 // 	VDU 23, 0, &A0, bufferId; 17, blockSize; targetBufferId;
+void vdp_adv_split_multiple_from( int bufferID, int blockSize, int targetBufferID );
 // Command 18: Split a buffer into blocks by width
 // 	VDU 23, 0, &A0, bufferId; 18, width; blockCount;
+void vdp_adv_split_by_width( int bufferID, int width, int blockCount );
 // Command 19: Split by width into blocks and spread across target buffers
 // 	VDU 23, 0, &A0, bufferId; 19, width; [targetBufferId1;] [targetBufferId2;] ... 65535;
+void vdp_adv_split_by_width_multiple( int bufferId, int width, int num_buffers, ... );
 // Command 20: Split by width into blocks and spread across blocks starting at target buffer ID
 // 	VDU 23, 0, &A0, bufferId; 20, width; blockCount; targetBufferId;
+void vdp_adv_split_by_width_multiple_from( int bufferID, int width, int blockCount, int targetBufferID );
 // Command 21: Spread blocks from a buffer across multiple target buffers
 // 	VDU 23, 0, &A0, bufferId; 21, [targetBufferId1;] [targetBufferId2;] ... 65535;
+void vdp_adv_spread_multiple( int bufferId, int num_buffers, ... );
 // Command 22: Spread blocks from a buffer across blocks starting at target buffer ID
 // 	VDU 23, 0, &A0, bufferId; 22, targetBufferId;
+void vdp_adv_spread_multiple_from( int bufferID, int targetBufferID );
 // Command 23: Reverse the order of blocks in a buffer
 // 	VDU 23, 0, &A0, bufferId; 23
+void vdp_adv_reverse_block_order( int bufferID );
 // Command 24: Reverse the order of data of blocks within a buffer
 // 	VDU 23, 0, &A0, bufferId; 24, options, [valueSize;] [chunkSize;]
+void vdp_adv_reverse_block_data( int bufferID, int options, int valueSize, int chunkSize );
 // Command 25: Copy blocks from multiple buffers by reference
 // 	VDU 23, 0, &A0, targetBufferId; 25, sourceBufferId1; sourceBufferId2; ...; 65535;
+void vdp_adv_copy_multiple_by_reference( int bufferId, int num_buffers, ... );
 // Command 26: Copy blocks from multiple buffers and consolidate
 // 	VDU 23, 0, &A0, targetBufferId; 26, sourceBufferId1; sourceBufferId2; ...; 65535;
+void vdp_adv_copy_multiple_consolidate( int bufferId, int num_buffers, ... );
 // Command 64: Compress a buffer
 // 	VDU 23, 0, &A0, targetBufferId; 64, sourceBufferId;
+void vdp_adv_compress_buffer( int targetBufferID, int sourceBufferId );
 // Command 65: Decompress a buffer
 // 	VDU 23, 0, &A0, targetBufferId; 65, sourceBufferId;
+void vdp_adv_decompress_buffer( int targetBufferID, int sourceBufferId );
 
 // Helper functions using full 16-bit buffer-id
 int vdp_adv_load_sprite_bitmaps( const char *fname_prefix, const char *fname_format, int width, int height, int num, int bitmap_num );
@@ -407,25 +465,59 @@ void vdp_audio_set_waveform_parameter( int channel, int parameter, int value );
 
 // ========= Context Management =========
 // VDU 23, 0, &C8, 0, contextId: Select context stack
+void vdp_context_select( int context_id );
 // VDU 23, 0, &C8, 1, contextId: Delete context stack
+void vdp_context_delete( int context_id );
 // VDU 23, 0, &C8, 2, flags: Reset
+void vdp_context_reset( int flags );
 // VDU 23, 0, &C8, 3: Save context
+void vdp_context_save( void );
 // VDU 23, 0, &C8, 4: Restore context
+void vdp_context_restore( void );
 // VDU 23, 0, &C8, 5, contextId: Save and select a copy of a context
+void vdp_context_save_copy( int context_id );
 // VDU 23, 0, &C8, 6: Restore all
+void vdp_context_restore_all( void );
 // VDU 23, 0, &C8, 7: Clear stack
+void vdp_context_clear_stack( void );
 
 // ========= Font Management =========
 // VDU 23, 0, &95: Font management
 // VDU 23, 0, &95, 0, bufferId; flags: Select font
+void vdp_font_select( int buffer_id );
 // VDU 23, 0, &95, 1, bufferId; width, height, ascent, flags: Create font from buffer
+void vdp_font_create( int buffer_id, int width, int height, int ascent, int flags );
 // VDU 23, 0, &95, 2, bufferId; field, value;: Set or adjust font property
+void vdp_font_adjust( int buffer_id, int field, int value );
 // VDU 23, 0, &95, 3, bufferId; [<args>]: Reserved
 // VDU 23, 0, &95, 4, bufferId;: Clear/Delete font
+void vdp_font_delete( int buffer_id );
 // VDU 23, 0, &95, 5, bufferId;: Copy system font to buffer
-//
+void vdp_font_copy( int buffer_id );
 
-
+// ========= Mouse Control =========
+// VDU 23, 0, &89, command, [<args>]: Mouse control
+// 	VDU 23, 0, &89, 0: Enable the mouse
+void vdp_mouse_enable( void );
+// 	VDU 23, 0, &89, 1: Disable the mouse
+void vdp_mouse_disable( void );
+// 	VDU 23, 0, &89, 2: Reset the mouse
+void vdp_mouse_reset( void );
+// 	VDU 23, 0, &89, 3, cursorId;: Set mouse cursor
+void vdp_mouse_set_cursor( int cursorId );
+// 	VDU 23, 0, &89, 4, x; y;: Set mouse cursor position
+void vdp_mouse_set_position( int X, int Y );
+// 	VDU 23, 0, &89, 5, x1; y1; x2; y2;: Reserved
+// 	VDU 23, 0, &89, 6, sampleRate: Set mouse sample rate
+void vdp_mouse_sample_rate( int sampleRate );
+// 	VDU 23, 0, &89, 7, resolution: Set mouse resolution
+void vdp_mouse_resolution( int resolution );
+// 	VDU 23, 0, &89, 8, scaling: Set mouse scaling
+void vdp_mouse_scaling( int scaling );
+// 	VDU 23, 0, &89, 9, acceleration;: Set mouse acceleration
+void vdp_mouse_acceleration( int acceleration );
+// 	VDU 23, 0, &89, 10, wheelAcceleration; wheelAccHighByte: Set mouse wheel acceleration (accepts a 24-bit value)
+void vdp_mouse_wheel_accel( int wheelAccel );
 
 
 #ifdef __cplusplus
