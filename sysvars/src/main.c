@@ -40,7 +40,7 @@ int main(/*int argc, char *argv[]*/)
 
 	int delay = 255;
 	while (delay--);
-	printf("Width %d Height %d, %d colours\n", scrwidth, scrheight, colours);
+	printf("Mode 0 Width %d Height %d, %d colours\n", scrwidth, scrheight, colours);
 
 	// draw 15 coloured boxes
 
@@ -51,8 +51,10 @@ int main(/*int argc, char *argv[]*/)
 		vdp_filled_rect( 16*(c+1)-1, 64+15 );
 	}
 
-	TAB(0,15);
+	TAB(0,12);
 	// read pixels from centre of each box
+	COL(2);printf("ReadPixels");
+	COL(15);
 	for (int i = 0; i< 16; i++)
 	{
 		uint16_t x, y;
@@ -62,27 +64,31 @@ int main(/*int argc, char *argv[]*/)
 		//vdp_point( x, y-12 );
 
 		uint24_t col = vdp_return_pixel_colour( x, y );
-		TAB(0,12+i);printf("%d,%d:",x,y);
-	        TAB(10,12+i);printf("0x%06x\n", col);
-		vdp_gcol(0,15);
+		TAB(0,13+i);printf("%d,%d:",x,y);
+	        TAB(10,13+i);printf("0x%06x\n", col);
+		//vdp_gcol(0,15);
 		//wait();
 	}
 	printf("\n");
 
 	// redfine a palette entry
-	vdp_define_colour( 1, 52, 0, 0, 0 );
+	printf("Redefine col 1 0000AA Red as FFAA55 Turquoise\n");
+	COL(2);printf("Pallete\n");
+	COL(15);
+	vdp_define_colour( 1, 255, 0x55, 0xAA, 0xFF );
 
 	// print out palette entries
 	for (int i=0; i<16; i++) 
 	{
-		uint8_t palette_entry = vdp_read_palette_entry(i);
+		uint24_t pal_col = vdp_return_palette_entry_colour(i);
+		uint8_t  pal_ind = vdp_return_palette_entry_index(i);
 		uint24_t p1 = getsysvar_scrpixel();
 		uint8_t p2 = getsysvar_scrpixelIndex();
-		printf("Palette %02d : 0x%02X 0x%06X %d\n",i, palette_entry, p1,  p2);
+		printf("Palette %02d : 0x%06x 0x%02x : 0x%06x 0x%02x \n",i, pal_col, pal_ind, p1,  p2);
 	}
-	printf("Current Text FG %d BG %d\n",
-			vdp_read_palette_entry(128),
-			vdp_read_palette_entry(129) );
+	printf("Current Text FG %x BG %x\n",
+			vdp_return_palette_entry_colour(128),
+			vdp_return_palette_entry_colour(129) );
 	COL(15);
 	vdp_logical_scr_dims(true);
 	return 0;
