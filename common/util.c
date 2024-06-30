@@ -101,7 +101,7 @@ double my_atof(char *str)
 
 int load_bitmap_file( const char *fname, int width, int height, int bmap_id )
 {
-	FILE *fp;
+	FILE *fp = NULL;
 	char *buffer;
 	int bytes_remain = width * height;
 
@@ -109,8 +109,11 @@ int load_bitmap_file( const char *fname, int width, int height, int bmap_id )
 		printf( "Failed to allocate %d bytes for buffer.\n",CHUNK_SIZE );
 		return -1;
 	}
-	if ( !(fp = fopen( fname, "rb" ) ) ) {
+
+	fp = fopen( fname, "rb" );
+	if ( fp == NULL )  {
 		printf( "Error opening file \"%s\". Quitting.\n", fname );
+		getch();
 		return -1;
 	}
 
@@ -124,7 +127,7 @@ int load_bitmap_file( const char *fname, int width, int height, int bmap_id )
 
 		vdp_adv_write_block(bmap_id, size);
 
-		if ( fread( buffer, 1, size, fp ) != (size_t)size ) return 0;
+		if ( fread( buffer, 1, size, fp ) != (size_t)size ) return -1;
 		mos_puts( buffer, size, 0 );
 		//printf(".");
 
@@ -382,6 +385,14 @@ int input_int(int x, int y, char *msg)
 	clear_line(y);
 	return num;
 }
+int input_int_noclear(int x, int y, char *msg)
+{
+	int num;
+	TAB(x,y);
+	printf("%s:",msg);
+	scanf("%d",&num);
+	return num;
+}
 char input_char(int x, int y, char *msg)
 {
 	char buf[30];
@@ -389,6 +400,14 @@ char input_char(int x, int y, char *msg)
 	printf("%s:",msg);
 	scanf("%[^\n]s",buf);
 	clear_line(y);
+	return buf[0];
+}
+char input_char_noclear(int x, int y, char *msg)
+{
+	char buf[30];
+	TAB(x,y);
+	printf("%s:",msg);
+	scanf("%[^\n]s",buf);
 	return buf[0];
 }
 
@@ -451,6 +470,25 @@ void input_string(int x, int y, char *msg, char *input, unsigned int max)
 	free(buffer);
 	clear_line(y);
 }
+void input_string_noclear(int x, int y, char *msg, char *input, unsigned int max)
+{
+	char *buffer;
+
+	TAB(x,y);
+	printf("%s:",msg);
+	buffer = getline();
+	if (strlen(buffer)>max)
+	{
+		strncpy(input, buffer, max);
+		input[max-1]=0;
+	}
+	else
+	{
+		strcpy(input, buffer);
+	}
+	free(buffer);
+}
+
 
 uint8_t wait_for_key(uint8_t key)
 {
@@ -540,3 +578,48 @@ bool wait_for_any_key_with_exit_timeout(uint8_t exit_key, int timeout)
 	return true;
 }
 
+Position copyPosition( Position src )
+{
+	Position dest;
+	dest.x=src.x;
+	dest.y=src.y;
+	return dest;
+}
+Position setPosition( int x, int y )
+{
+	Position dest;
+	dest.x = x;
+	dest.y = y;
+	return dest;
+}
+Position addConstPosition( int val )
+{
+	Position dest;
+	dest.x += val;
+	dest.y += val;
+	return dest;
+}
+Position addPosition( Position a, Position b )
+{
+	Position dest;
+	dest.x = a.x + b.x;
+	dest.y = a.y + b.y;
+	return dest;
+}
+Position addPositionXY( Position a, int x, int y )
+{
+	Position dest;
+	dest.x = a.x + x;
+	dest.y = a.y + y;
+	return dest;
+}
+void addToPosition( Position dest, Position src )
+{
+	dest.x += src.x;
+	dest.y += src.y;
+}
+void addToPositionXY( Position dest, int x, int y )
+{
+	dest.x += x;
+	dest.y += y;
+}
