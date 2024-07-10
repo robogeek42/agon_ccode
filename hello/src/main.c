@@ -31,3 +31,15 @@ int main(/*int argc, char *argv[]*/)
 
 
 
+static KEY_EVENT prev_key_event = { 0 };
+void key_event_handler( KEY_EVENT key_event )
+{
+	if ( key_event.code == 0x7d ) {
+		vdp_cursor_enable( true );
+		exit( 1 ); // Exit program if esc pressed
+	}
+
+	if ( key_event.key_data == prev_key_event.key_data ) return;
+	prev_key_event = key_event;
+}
+
