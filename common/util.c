@@ -549,12 +549,15 @@ uint8_t wait_for_key_with_exit(uint8_t key, uint8_t exit_key)
 	}
 }
 
-void wait_for_any_key()
+uint8_t wait_for_any_key()
 {
 	do 
 	{
 		vdp_update_key_state();
 	} while(key_pressed_code == 0);
+	int key = key_pressed_code;
+	while( vdp_check_key_press(key)) vdp_update_key_state();
+	return key;
 }
 
 bool wait_for_any_key_with_exit(uint8_t exit_key)
@@ -563,7 +566,9 @@ bool wait_for_any_key_with_exit(uint8_t exit_key)
 	{
 		vdp_update_key_state();
 	} while(key_pressed_code == 0);
-	if ( key_pressed_code == exit_key) return false;
+	int key = key_pressed_code;
+	while( vdp_check_key_press(key)) vdp_update_key_state();
+	if ( key == exit_key) return false;
 	return true;
 }
 
@@ -576,6 +581,15 @@ bool wait_for_any_key_with_exit_timeout(uint8_t exit_key, int timeout)
 	} while( key_pressed_code == 0 && timeout_ticks > clock() );
 	if ( key_pressed_code == exit_key) return false;
 	return true;
+}
+
+void delay(int timeout)
+{
+	clock_t timeout_ticks = clock()+timeout;
+	do 
+	{
+		vdp_update_key_state();
+	} while( timeout_ticks > clock() );
 }
 
 Position copyPosition( Position src )

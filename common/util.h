@@ -80,9 +80,10 @@ void input_string_noclear(int x, int y, char *msg, char *input, unsigned int max
 
 uint8_t wait_for_key(uint8_t key);
 uint8_t wait_for_key_with_exit(uint8_t key, uint8_t exit_key);
-void wait_for_any_key();
+uint8_t wait_for_any_key();
 bool wait_for_any_key_with_exit(uint8_t exit_key);
 bool wait_for_any_key_with_exit_timeout(uint8_t exit_key, int timeout);
+void delay(int timeout);
 
 Position copyPosition( Position src );
 Position setPosition( int x, int y );
