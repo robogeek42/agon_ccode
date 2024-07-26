@@ -48,7 +48,10 @@ void key_event_handler( KEY_EVENT key_event )
 
 	if ( key_event.key_data == prev_key_event.key_data ) return;
 	prev_key_event = key_event;
-	printf("Key 0x%X Mod 0x%X Asc 0x%X Down 0x%X\n",key_event.code, key_event.mods, key_event.ascii, key_event.down);
+	if (key_event.down == 1)
+	{
+		printf("Key 0x%X Mod 0x%X Asc 0x%X\n",key_event.code, key_event.mods, key_event.ascii);
+	}
 }
 
 void wait_clock( clock_t ticks )

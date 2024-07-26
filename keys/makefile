@@ -13,3 +13,6 @@ CXXFLAGS = -Wall -Wextra -Oz
 # ----------------------------
 
 include $(shell cedev-config --makefile)
+
+install: src/main.c bin/$(NAME).bin
+	cp bin/$(NAME).bin $(NAME)
