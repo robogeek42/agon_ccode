@@ -141,6 +141,7 @@ void game_loop()
 		{
 			if ( bSamplePlaying && !bSampleOn )
 			{
+				vdp_audio_sample_seek(1, 0);
 				vdp_audio_set_volume(1, 100);
 				bSampleOn = true;
 				COL(13); TAB(22,6); printf("%s",bSampleOn?"On ":"Off");
@@ -156,7 +157,7 @@ void game_loop()
 		vdp_update_key_state();
 	} while (exit==0);
 
-	COL(15);
+	COL(15); TAB(0,12);
 }
 
 
