@@ -27,12 +27,12 @@
 310 REM Buffer 3 : X 
 320 VDU 23,0,&A0, 3; 2                   :REM clear buffer 3
 330 VDU 23,0,&A0, 3; 3, 3;               :REM create (CMD=3) buffer 3, length 3
-340 VDU 23,0,&A0, 3; 5, &C2, 0; 3; 10;   :REM Adjust to starting X value (10)
+340 VDU 23,0,&A0, 3; 5, &C2, 0; 3; 10; 0 :REM Adjust to starting X value (10). 3 bytes
 
 350 REM Buffer 4 : Y
 360 VDU 23,0,&A0, 4; 2                   :REM clear buffer 4
 370 VDU 23,0,&A0, 4; 3, 3;               :REM create (CMD=3) buffer 4, length 3
-380 VDU 23,0,&A0, 4; 5, &C2, 0; 3; 10;   :REM Adjust to starting Y value (10)
+380 VDU 23,0,&A0, 4; 5, &C2, 0; 3; 10; 0 :REM Adjust to starting Y value (10). 3 bytes
 
 390 REM Buffer 5 : cnt1
 400 VDU 23,0,&A0, 5; 2                   :REM clear buffer 5
@@ -59,13 +59,13 @@
 560 VDU 23,0,&A0, 3; 5, &C4, 0; 2; 30;   :REM add 30 to X                           (13)
 570 VDU 23,0,&A0, 5; 5,   3, 0, 0, 255   :REM decrement cnt1                        (10)
 580 VDU 23,0,&A0, 1; 5,   3, 8, 0, 1     :REM inc colour                            (10)
-590 VDU 23,0,&A0, 2; 6, 0, 5; 0;         :REM cond-call cmd buff if cnt1!=0         (11) 80
+590 VDU 23,0,&A0, 2; 8, 0, 5; 0;         :REM cond-jump cmd buff if cnt1!=0         (11) 80
 600 :
 610 VDU 23,0,&A0, 4; 5, &C4, 0; 2; 30;   :REM add 30 to Y                           (13)
 620 VDU 23,0,&A0, 3; 5, &C2, 0; 2; 10;   :REM Reset X back to left                  (13)
 630 VDU 23,0,&A0, 6; 5,   3, 0, 0, 255   :REM decrement cnt2                        (10)
 640 VDU 23,0,&A0, 5; 5,   2, 0; 16       :REM reset cnt1 to 16                      (10)
-650 VDU 23,0,&A0, 2; 6, 0, 6; 0;         :REM cond-call cmd buff if cnt2!=0         (11) 57+80=137
+650 VDU 23,0,&A0, 2; 8, 0, 6; 0;         :REM cond-jump cmd buff if cnt2!=0         (11) 57+80=137
 660 :
 690 ENDPROC
 
