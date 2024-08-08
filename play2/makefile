@@ -2,8 +2,8 @@
 # Makefile Options
 # ----------------------------
 
-NAME = play
-DESCRIPTION = "play sounds"
+NAME = play2
+DESCRIPTION = "play sounds - fast react"
 COMPRESSED = NO
 LDHAS_ARG_PROCESSING = 1
 

@@ -12,6 +12,9 @@
 #include "util.h"
 #include "keydefines.h"
 
+// Volume is 0 -> 127 (max)
+#define VOLUME 127
+
 int sample_len = 0;
 
 void wait() { char k=getchar(); if (k=='q') exit(0); }
@@ -87,6 +90,8 @@ int main(int argc, char *argv[])
 	}
 	COL(14); printf(" %d bytes loaded.", sample_len);
 
+	//vdp_audio_set_sample_frequency(-1, 320);
+
 	// set channel 1 to use sample -1 
 	// This maps to abs(-1)+64255
 	vdp_audio_set_sample( 1, 64256 );
@@ -108,10 +113,9 @@ void game_loop()
 
 	COL(14); TAB(0,6); printf("Playing: "); 
 	COL(14); TAB(16,6); printf("Sound: "); 
-	COL(13); TAB(10,6); printf("%s",bSamplePlaying?"Yes":"No ");
+	COL(13); TAB(8,6); printf("%s",bSamplePlaying?"Yes":"No ");
 	COL(13); TAB(22,6); printf("%s",bSampleOn?"On ":"Off");
-	COL(15); TAB(0,8); printf("Press P to start, K to kill\n");
-	COL(15); TAB(0,9); printf("      Hold space to hear\n");
+	COL(15); TAB(0,8); printf("Press P to start, K to kill  Hold space to hear\n");
 
 	do {
 		if ( vdp_check_key_press( 0x26 ) || vdp_check_key_press( 0x2D ) ) exit=1; // q or x
@@ -120,10 +124,10 @@ void game_loop()
 		{
 			if ( key_delay_ticks < clock() && !bSamplePlaying )
 			{
-				vdp_audio_play_note(1, 100, 435, -1 );
-				vdp_audio_set_volume(1, 0);
+				// start audio playing on repeat, but turn down to 0 volume
+				vdp_audio_play_note(1, 0, 435, -1 );
 				bSamplePlaying = true;
-				COL(13); TAB(10,6); printf("%s",bSamplePlaying?"Yes":"No ");
+				COL(13); TAB(8,6); printf("%s",bSamplePlaying?"Yes":"No ");
 				key_delay_ticks = clock() + key_delay;
 			}
 		}
@@ -131,9 +135,10 @@ void game_loop()
 		{
 			if ( key_delay_ticks < clock() && bSamplePlaying )
 			{
+				// kill the audio
 				vdp_audio_reset_channel(1);
 				bSamplePlaying = false;
-				COL(13); TAB(10,6); printf("%s",bSamplePlaying?"Yes":"No ");
+				COL(13); TAB(8,6); printf("%s",bSamplePlaying?"Yes":"No ");
 				key_delay_ticks = clock() + key_delay;
 			}
 		}
@@ -141,8 +146,10 @@ void game_loop()
 		{
 			if ( bSamplePlaying && !bSampleOn )
 			{
+				// Seek will start the sample from the begining each time space is pressed
 				vdp_audio_sample_seek(1, 0);
-				vdp_audio_set_volume(1, 100);
+				// Turn on channel
+				vdp_audio_set_volume(1, VOLUME);
 				bSampleOn = true;
 				COL(13); TAB(22,6); printf("%s",bSampleOn?"On ":"Off");
 			}
