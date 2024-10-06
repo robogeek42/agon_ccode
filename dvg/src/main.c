@@ -7,6 +7,7 @@
 #include <time.h>
 #include "keydefines.h"
 #include "../../common/util.h"
+#include "math.h"
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
@@ -130,7 +131,7 @@ void game_loop()
 // always a divisor
 int get_divisor_from_scale(int scale)
 {
-	int mult = 1;
+	int div = 1;
 	switch (scale) {
 		case 0: return 512;
 		case 1: return 256;
@@ -144,7 +145,7 @@ int get_divisor_from_scale(int scale)
 		default:
 		case 9: return 1;
 	}
-	return mult;
+	return div;
 }
 
 // This is the scaling given in https://www.philpem.me.uk/_media/elec/vecgen/vecgen.pdf
@@ -219,22 +220,12 @@ void do_cmd_VEC(uint8_t w1_lo, uint8_t w1_hi, uint8_t w2_lo, uint8_t w2_hi)
 
 	int local_scale = (w1_hi & 0xF0) >> 4;
 	int bri   = (w2_hi & 0xF0) >> 4;
-	
+
+	// equivalent to 2^(Sg+Sl)-9
 	int div = get_divisor_from_scale(local_scale + state.global_scale);
 	int xadj = x / div;
 	int yadj = y / div;
 
-#if 0
-	int factor = 0; bool gmult = false;
-	decode_scale(state.global_scale, &factor, &gmult);
-	if (mult) {
-		xadj *= factor;
-		yadj *= factor;
-	} else {
-		xadj /= factor;
-		yadj /= factor;
-	}
-#endif
 	
 	if (bDecode)
 	{
@@ -357,7 +348,10 @@ void do_cmd_SVEC(uint8_t lo, uint8_t hi)
 	int sgn_y = (hi & 0x4)==0 ? 1 : -1;
 	y *= sgn_y;
 	
+	int bri = (lo & 0xF0) >> 4;
 	int Ss = ((lo & 0x8) >> 2) | ( ((hi & 0x8) >> 3) ); // Ss (0=*2, 1=*4, 2=*8, 3=*16);
+
+#if 0
 	int mult = 1;
 	switch (Ss) {
 		case 0: mult=2; break;
@@ -366,31 +360,24 @@ void do_cmd_SVEC(uint8_t lo, uint8_t hi)
 		case 3: mult=16; break;
 	};
 
-	int bri = (lo & 0xF0) >> 4;
-
 	int xadj = x * mult;
 	int yadj = y * mult;
-
-	//int div = get_divisor_from_scale(state.global_scale);
-	//xadj /= div;
-	//yadj /= div;
-
-#if 0
-	int factor = 0; bool gmult = false;
-	decode_scale(state.global_scale, &factor, &gmult);
-
-	if (gmult) {
-		xadj *= factor;
-		yadj *= factor;
-	} else {
-		xadj /= factor;
-		yadj /= factor;
-	}
+#else
+	int p = (state.global_scale + Ss +2);
+	if (p>9) p=9;
+	p -= 1;
+	float factor = pow(2, p);
+	int xadj = x * factor;
+	int yadj = y * factor;
 #endif
 
 	if (bDecode)
 	{
+#if 0
 		printf("SVEC scale=%02d(*%02d) bri=%02d x=%3d y=%3d (%.3f, %.3f)\n", Ss, mult, bri, x, y, (float)xadj, (float)yadj);
+#else
+		printf("SVEC scale=%02d(*%0.2f) bri=%02d x=%3d y=%3d (%.3f, %.3f)\n", Ss, factor, bri, x, y, (float)xadj, (float)yadj);
+#endif
 	}
 	if (bDraw)
 	{
@@ -627,7 +614,7 @@ void run_tests()
 	vdp_clear_screen();
 
 	// Test pattern from ROM - directly exec subroutine
-	state.global_scale = 7;
+	state.global_scale = 0;
 	move_to(0,0);
 	run(0x0800); // show instructions
 
@@ -637,7 +624,7 @@ void run_tests()
 	// Call ROM routine to draw "BANK ERROR"
 	run(0x0888);
 	// and again larger in a different part of the screen
-	state.global_scale = 3;
+	state.global_scale = 2;
 	move_to(500,700);
 	run(0x0890);
 
@@ -645,7 +632,7 @@ void run_tests()
 	vdp_clear_screen();
 
 	// draw the shrapnel pattern 1
-	state.global_scale = 0;
+	state.global_scale = 1;
 	move_to(500,500);
 	run_debug(0x0900);
 
