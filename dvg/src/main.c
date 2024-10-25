@@ -34,12 +34,30 @@ uint8_t sptr = 0;
 bool bDecode = true;
 bool bDraw = false;
 
+typedef struct {
+	int size;
+	int type;
+	int x;
+	int y;
+	int vx;
+	int vy;
+} Asteroid;
+
+Asteroid asteroids[11];
+int num_asteroids = 0;
+
+
 void game_loop();
 uint16_t dvg_next_command(uint16_t addr);
 void inject_test(int test_id, uint16_t addr);
 void run_tests();
+void add_asteroid(int size, int type, int x, int y, int vx, int vy);
+void draw_asteroid(int a);
+bool clipline(int x1, int y1, int x2, int y2, int *newx1, int *newy1, int *newx2, int *newy2) ;
 
 bool bEnd = false;
+bool bExit = false;
+bool bErase = false;
 
 int last_x = 0;
 int last_y = 0;
@@ -48,22 +66,141 @@ int current_y = 0;
 
 void move_to(int x, int y)
 {
+	last_x = current_x;
+	last_y = current_y;
+
 	vdp_plot(4, x, y);
+
+	current_x = x;
+	current_y = y;
+}
+
+void draw_line(int x1, int y1, int x2, int y2)
+{
+	vdp_move_to(x1, y1);
+	last_x = x1;
+	last_y = y1;
+
+	vdp_line_to(x2, y2);
+	current_x = x2;
+	current_y = y2;
+}
+
+bool clipline(int x1, int y1, int x2, int y2, int *newx1, int *newy1, int *newx2, int *newy2) 
+{
+	bool clipx=false; bool clipy=false;
+	int lenx = abs(x2 - x1);
+	int leny = abs(y2 - y1);
+	int sign_x = (x2 - x1) < 0 ? -1 : 1;
+	int sign_y = (y2 - y1) < 0 ? -1 : 1;
+	int border=0;
+	*newx1 = x1;
+	*newy1 = y1;
+	*newx2 = x2;
+	*newy2 = y2;
+
+	// case if X2 or Y2 are off top/right of screen (origin in bot-left)
+	if ( y2 > 1023 )
+	{
+		clipx=true;
+		*newx2 = x1 + sign_x *((1024-y1) * lenx) / leny ;
+		border = 1023;
+	}
+	if (x2 > 1023)
+	{
+		clipy=true;
+		*newy2 = y1 + sign_y * ((1024-x1) * leny) / lenx ;
+		border = 1023;
+	}
+
+	// case if X2 or Y2 are off bot/left of screen (origin in bot-left)
+	if ( y2 < 0 )
+	{
+		clipx=true;
+		*newx2 = x1 + sign_x * (y1 * lenx) / leny;
+		border=0;
+	}
+	if ( x2 < 0 )
+	{
+		clipy=true;
+		*newy2 =  y1 + sign_y * (x1 * leny) / lenx;
+		border=0;
+	}
+
+	if (clipx && !clipy)
+	{
+		if (border==1023) *newy2 = border;
+		if (border==0) *newy2 = border;
+	}
+	if (clipy && !clipx)
+	{
+		if (border==1023) *newx2 = border;
+		if (border==0) *newx2 = border;
+	}
+	return true;
+}
+
+
+void draw_clipped_line(int x1, int y1, int x2, int y2)
+{
+	// clip
+	if (x2 > 1023 || y2 > 1023 || x2 < 0 || y2 < 0)
+	{
+		//printf("p1 %d,%d p2 %d,%d\n",x1, y1, x2, y2);
+		int newx1=0, newy1=0, newx2 = 0, newy2 = 0;
+		if ( clipline(x1, y1, x2, y2, &newx1, &newy1, &newx2, &newy2) != true )
+		{
+			//printf("Get clip failed\n");
+		}
+		//printf("clipped line (%d,%d) -> (%d,%d)\n", newx1, newy1, newx2, newy2);
+
+		if (newx1 != x1 || newy1 != y1)
+		{
+			if (newx1 != x1)
+			{
+				if (x1 < 0)    { x1 = x1 + 1024; }
+				if (x1 > 1023) { x1 = x1 % 1024; }
+			}
+			if (newy1 != y1)
+			{
+				if (y1 < 0)    { y1 = y1 + 1024; }
+				if (y1 > 1023) { y1 = y1 % 1024; }
+			}
+			draw_line(x1, y1, newx1, newy1);
+		}
+		draw_line(newx1, newy1, newx2, newy2);
+		if (newx2 != x2 || newy2 != y2)
+		{
+			if (newx2 != x2)
+			{
+				if (x2 < 0)    { x2 = x2 + 1024; newx2 = 1023; }
+				if (x2 > 1023) { x2 = x2 % 1024; newx2 = 0; }
+			}
+			if (newy2 != y2)
+			{
+				if (y2 < 0)    { y2 = y2 + 1024; newy2 = 1023; }
+				if (y2 > 1023) { y2 = y2 % 1024; newy2 = 0; }
+			}
+			draw_line(newx2, newy2, x2, y2);
+		}
+	} else {
+		draw_line(x1, y1, x2, y2);
+	}
 }
 
 void draw_to(int x, int y)
 {
-	vdp_plot(5, x, y);
+	draw_clipped_line(current_x, current_y, x, y);
 }
 
 void draw_relative(int dx, int dy)
 {
-	vdp_plot(1, dx, dy);
+	draw_clipped_line(current_x, current_y, current_x+dx, current_y+dy);
 }
 
 void move_relative(int dx, int dy)
 {
-	vdp_plot(0, dx, dy);
+	move_to(current_x+dx, current_y+dy);
 }
 
 int main(/* int argc, char *argv[] */)
@@ -79,6 +216,9 @@ int main(/* int argc, char *argv[] */)
 	vdp_gcol(0, 128);
 	vdp_clear_graphics();
 
+	draw_box(0, 0, 1023, 1023, 3);
+	vdp_gcol(0, 15);
+
 	// load the asteroids ROM into 0x800
 	uint8_t ret = mos_load( "asteroids_data_raw.bin", (uint24_t) &(dvgram[0x800]),  1822 );
 	if ( ret != 0 )
@@ -86,16 +226,36 @@ int main(/* int argc, char *argv[] */)
 		printf("Error loading asteroids_data_raw.bin\n");
 	}
 
-	run_tests();
+	vdp_gcol(0,1); vdp_move_to(500,800); vdp_plot(0x91, 6, 6);
+	vdp_gcol(0,2); vdp_move_to(700,1100%1024); vdp_plot(0x91, 6, 6);
+	vdp_gcol(0,3); vdp_move_to(200,800); vdp_plot(0x91, 6, 6);
+	vdp_gcol(0,4); vdp_move_to(1024-200,400); vdp_plot(0x91, 6, 6);
+	vdp_gcol(0, 15);
+	draw_clipped_line(500, 800, 700, 1100);
+	vdp_gcol(0, 14);
+	draw_clipped_line(200, 800, -200,400);
+
+	vdp_gcol(0,1);
+	vdp_move_to(500,800); vdp_plot(0x91, 6, 6);
+	vdp_gcol(0,2);
+	vdp_move_to(700,1100%1024); vdp_plot(0x91, 6, 6);
+
+	//run_tests();
+
+
+	game_loop();
 
 	return 0;
 }
 
 void game_loop()
 {
-	bool bExit = false;
 	clock_t key_ticks = clock() + 10;
 	int key_rate = 10;
+
+	add_asteroid(1, 0, 480, 501, 1, -2);
+	draw_asteroid(0);
+
 	do {
 		bExit=false;
 		vdp_update_key_state();
@@ -115,6 +275,13 @@ void game_loop()
 		if ( key_ticks < clock() && vdp_check_key_press( KEY_DOWN ) )
 		{
 			key_ticks = clock() + key_rate;
+		}
+
+		for (int a=0; a < num_asteroids; a++) {
+			bErase = true; draw_asteroid(a);
+			asteroids[a].x += asteroids[a].vx;
+			asteroids[a].y += asteroids[a].vy;
+			bErase = false; draw_asteroid(a);
 		}
 
 		if ( vdp_check_key_press(0x2d) ) // x
@@ -233,12 +400,18 @@ void do_cmd_VEC(uint8_t w1_lo, uint8_t w1_hi, uint8_t w2_lo, uint8_t w2_hi)
 	}
 	if (bDraw)
 	{
-		set_brightness(bri);
-		if (bri==0)
+		if (bErase)
 		{
-			move_relative(xadj, yadj);
-		} else {
+			set_brightness(0);
 			draw_relative(xadj,yadj);
+		} else {
+			set_brightness(bri);
+			if (bri==0)
+			{
+				move_relative(xadj, yadj);
+			} else {
+				draw_relative(xadj,yadj);
+			}
 		}
 	}
 }
@@ -262,6 +435,8 @@ void do_cmd_CUR(uint8_t w1_lo, uint8_t w1_hi, uint8_t w2_lo, uint8_t w2_hi)
 	}
 	if (bDraw)
 	{
+		x %= 1024;
+		y %= 1024;
 		move_to(x,y);
 	}
 }
@@ -275,6 +450,7 @@ void do_cmd_HALT()
 	{
 		printf("HALT \n");
 	}
+	bEnd = true;
 }
 
 
@@ -381,11 +557,19 @@ void do_cmd_SVEC(uint8_t lo, uint8_t hi)
 	}
 	if (bDraw)
 	{
-		set_brightness(bri);
-		if (bri==0) {
-			move_relative(xadj, yadj);
-		} else {
+		if (bErase)
+		{
+			set_brightness(0);
 			draw_relative(xadj, yadj);
+		} else {
+			set_brightness(bri);
+			if (bri==0) {
+				move_relative(xadj, yadj);
+				//vdp_plot(0, xadj, yadj);
+			} else {
+				draw_relative(xadj, yadj);
+				//vdp_plot(1, xadj, yadj);
+			}
 		}
 	}
 }
@@ -497,9 +681,17 @@ void run_debug(uint16_t addr)
 	bDecode = true;
 	bEnd = false;
 	state.insptr = addr;
+	int cnt=0;
 	while ( !bEnd )
 	{
 		state.insptr = dvg_next_command(state.insptr);
+		cnt++;
+		if ((cnt % 30)==0) {
+			if ( !wait_for_any_key_with_exit(KEY_x) ) {
+				bExit = true;
+				bEnd = true;
+			}
+		}
 	}
 }
 
@@ -616,7 +808,7 @@ void run_tests()
 	// Test pattern from ROM - directly exec subroutine
 	state.global_scale = 0;
 	move_to(0,0);
-	run(0x0800); // show instructions
+	run(0x0800);
 
 	wait_for_any_key();
 	vdp_clear_screen();
@@ -636,4 +828,74 @@ void run_tests()
 	move_to(500,500);
 	run_debug(0x0900);
 
+}
+
+uint16_t encode_CUR(uint16_t ramaddr, int scale, int x, int y)
+{
+	uint16_t w1=0, w2=0;
+	w1 =( 0xA << 12) | (y & 0x3FF);
+	w2 = scale << 12 | (x & 0x3FF);
+
+	dvgram[ramaddr++] =  w1 & 0xFF;
+	dvgram[ramaddr++] = (w1 & 0xFF00) >> 8;
+	dvgram[ramaddr++] =  w2 & 0xFF;
+	dvgram[ramaddr++] = (w2 & 0xFF00) >> 8;
+
+	return ramaddr;
+}
+
+uint16_t encode_JSR(uint16_t ramaddr, uint16_t addr)
+{
+	uint16_t w1 = 0;
+	w1 = ((addr - 0x800) >> 1) + 0x800;
+	w1 = (w1 & 0xFFF) | (0xC << 12);
+	dvgram[ramaddr++] =  w1 & 0xFF;
+	dvgram[ramaddr++] = (w1 & 0xFF00) >> 8;
+
+	return ramaddr;
+}
+uint16_t encode_HALT(uint16_t ramaddr)
+{
+	uint16_t w1 = 0;
+	w1 = (0xB << 12);
+	dvgram[ramaddr++] =  w1 & 0xFF;
+	dvgram[ramaddr++] = (w1 & 0xFF00) >> 8;
+
+	return ramaddr;
+}
+
+void add_asteroid(int size, int type, int x, int y, int vx, int vy)
+{
+	asteroids[num_asteroids].size = size;
+	asteroids[num_asteroids].type = type;
+	asteroids[num_asteroids].x = x;
+	asteroids[num_asteroids].y = y;
+	asteroids[num_asteroids].vx = vx;
+	asteroids[num_asteroids].vy = vy;
+	num_asteroids++;
+}
+
+void draw_asteroid(int a)
+{
+	uint16_t inst_addr = 0;
+	// set size and position
+	inst_addr = encode_CUR(inst_addr, asteroids[a].size, asteroids[a].x, asteroids[a].y);
+
+	// Use jump table at 0x09DE to get address for the rock pattern
+	uint16_t jumpramaddr = 0x9DE + asteroids[a].type*2;
+	dvgram[inst_addr++] = dvgram[jumpramaddr++];
+	dvgram[inst_addr++] = dvgram[jumpramaddr++];
+	//printf("type = %d 0x%04X \n",asteroids[a].type, jumpramaddr );
+	//inst_addr = encode_JSR(inst_addr, jaddr);
+	
+	// halt at end
+	inst_addr = encode_HALT(inst_addr);
+
+	/*
+	for (int b = 0; b < inst_addr; b++) { printf("0x%02X ",dvgram[b]); }
+	*/
+
+	//printf("\n");
+	state.insptr = 0;
+	run(state.insptr);
 }
